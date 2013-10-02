@@ -1,0 +1,328 @@
+<!doctype html>
+
+<html>
+	<head>
+		<!-- Definition of style sheet format, especially for the WebGL canevas: -->
+		<link rel="stylesheet" href="css/stylesheet.css">
+
+		<meta http-equiv="content-type" content="text/html; Charset=utf-8" />
+		
+		<!-- External JavaScript (JS) sources: -->
+		<script src="js/commonFunctions.js"></script>	<!-- Example external source -->
+		<script src='js/gl-matrix-min.js'></script>		<!-- Matrix Library -->
+		<script src='js/webglTools.js'></script>		<!-- Basic WebGL initialization tools -->
+
+		<!-- *** Vertex Shader ***
+		  -- Applies projection and model-view transformations to each vertex -->
+		<script id="shader-vs" type="x-shader/x-vertex">
+			//vertices are positioned according to the Bezier formula
+			attribute vec3 aVertexPosition;
+			attribute vec4 aColor;
+			uniform mat4 uMVMatrix;
+			uniform mat4 uPMatrix;
+			varying vec4 vColor;
+			
+			//points defined by the user (mouse clicks) are the 3 control points of the quadratic Bezier
+			uniform vec2 uP0;
+			uniform vec2 uP1;
+			uniform vec2 uP2;
+			
+			void main(void) {
+				//sets the size of the 3 control point primitive 'uP0', 'uP1', and 'uP2'
+				gl_PointSize = 5.0;
+				vColor = aColor; 
+				
+				//if the vertex z coordinate is not 0, then its a point and will be rendered with the red color
+				if (aVertexPosition.z != 0.0){
+					vColor = vec4(1.0, 0.0, 0.0, 1.0);
+					gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+				}else{
+					//vertex position is calculated according to the quadratic Bezier formula
+					float t = aVertexPosition.x;
+					vec2 B_t = (1.0 - t) * ((1.0 - t) * uP0 +  t * uP1) + t * ((1.0 - t) * uP1 + t * uP2);
+				
+					vec3 newVertexPos = vec3(B_t, 0.0);
+					gl_Position = uPMatrix * uMVMatrix * vec4(newVertexPos, 1.0);
+				}
+			}
+		</script>
+		
+		<!-- *** Fragment Shader ***
+		  -- Sets the pixel color using the "aColor" attribute -->
+		<script id="shader-fs" type="x-shader/x-fragment">
+			#ifdef GL_ES
+				precision highp float;
+			#endif
+
+			varying vec4 vColor;
+			void main(void) {
+				gl_FragColor = vColor;
+			}
+		</script>
+
+		<script>
+			var maxPoints = 3 //resolution of the Bezier curve, more points give a smoother curve
+			window.onkeydown = checkKey;
+
+
+			// Buffers to send data to the graphics card (vertices, indices, color per vertex)
+			var vertexBuffer = null;
+			var indexBuffer = null;
+			var colorBuffer = null;
+
+
+			// point coordinates
+			var pointsBuffer = null;
+			var pointsIndexBuffer = null;
+
+			var indices = []; //JavaScript array to store the indices of the curve
+			var vertices = []; //JavaScript array to store the vertices of the curve
+			var colors = []; //JavaScript array to store the color assigned to each vertex
+
+			var points = []; //JavaScript array to store and display the points of the Bezier curve
+			var pointsIndices = []; //JavaScript array to store the indices of the control points
+			var mvMatrix = mat4.create(); // The Model-View matrix
+			var pMatrix = mat4.create(); // The projection matrix
+
+			function checkKey(ev){
+				switch(ev.keyCode){
+					case 173: // '-' key (from keyboard)
+					case 109:{ // '-' key (from number pad)
+						if (maxPoints >1) --maxPoints;
+						initBuffers();
+						break;
+					}
+					case 49: // '+' key (from keyboard)
+					case 107:{ // '+' key (from number pad)
+						if (maxPoints <20) ++maxPoints;
+						maxPoints ++;
+						initBuffers();
+						break;
+					}
+					case 65:{ // 'a' key
+						points[3] -= 0.01;
+						initBuffers();
+						break;
+					}
+					case 68:{ // 'd' key
+						points[3] += 0.01; // notice that p[3] corresponds to p1.x 
+						initBuffers();
+						break;
+					}
+					case 87:{ // 'w'
+						points[4] += 0.01; // notice that p[4] corresponds to p1.y
+						initBuffers();
+						break;
+					}
+					case 83:{ // 's'
+						points[4] -= 0.01;
+						initBuffers();
+						break;
+					}
+					default:
+					  console.log(ev.keyCode); //--- DEBUG LINE ---
+					break;
+				}
+			}
+
+			//this function is called from initProgram() which is defined in webglTools.js, it is implemented here for clarity
+			function initShaderParameters(prg){
+				//The following lines get a reference to the uniforms and attributes defined in the shaders.
+				//This is a necessary step as the shaders are NOT written in JavaScript but in a 
+				//specialized language called GLSL.
+				
+				//--- Information for the Vertex Shader ---
+				prg.vertexPositionAttribute = glContext.getAttribLocation(prg, "aVertexPosition");
+				glContext.enableVertexAttribArray(prg.vertexPositionAttribute);
+				
+				prg.colorAttribute 			= glContext.getAttribLocation(prg, "aColor");
+				glContext.enableVertexAttribArray(prg.colorAttribute);
+				
+				prg.pMatrixUniform          = glContext.getUniformLocation(prg, 'uPMatrix');
+				prg.mvMatrixUniform         = glContext.getUniformLocation(prg, 'uMVMatrix');
+				
+				prg.p0Uniform         = glContext.getUniformLocation(prg, 'uP0');
+				prg.p1Uniform         = glContext.getUniformLocation(prg, 'uP1');
+				prg.p2Uniform         = glContext.getUniformLocation(prg, 'uP2');
+				
+				//--- Information for the Fragment Shader ---
+				// <none>
+			}
+
+			//initializes buffers: sends data from the javascript arrays to the graphics card
+			function initBuffers(){
+				// init or reset 'indices' and 'vertices' tables
+				indices = [];
+				vertices = [];				
+				colors = [];
+				
+				for (i = 0.0; i <= maxPoints; i++){
+					vertices.push(1.0/maxPoints * i, 0, 0);
+					indices.push(i);
+					colors.push(0.0, i/maxPoints, 0.0, 1.0); // dark to light green
+				}
+
+				vertexBuffer = getVertexBufferWithVertices(vertices);					
+				indexBuffer = getIndexBufferWithIndices(indices);
+				pointsIndexBuffer = getIndexBufferWithIndices(pointsIndices);
+				colorBuffer = getVertexBufferWithVertices(colors);
+				pointsBuffer = getVertexBufferWithVertices(points);
+			}
+
+			/*
+			* Draws the scene
+			*/
+			function drawScene(){
+				//light grey background
+				glContext.clearColor(0.9, 0.9, 1.0, 1.0); // #EEEEFF
+				
+				//activate z-buffer
+				glContext.enable(glContext.DEPTH_TEST);
+				
+				//resets color and depth buffer before drawing
+				glContext.clear(glContext.COLOR_BUFFER_BIT | glContext.DEPTH_BUFFER_BIT);
+				
+				//defines viewport dimensions based on the webgl canvas size
+				glContext.viewport(0, 0, c_width, c_height);
+						
+				//send transformation matrices to vertex shader
+				//perspective projection
+				//mat4.perspective(60, c_width / c_height, 0.1, 10000.0, pMatrix);
+				
+				//orthographic projection : left, right, bottom, top, near, far, dest
+				mat4.ortho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0, pMatrix);
+				
+				//this example does not apply model-view transformations
+				mat4.identity(mvMatrix);	
+
+				//send the projection and model view matrices to the vertex shader
+				glContext.uniformMatrix4fv(prg.pMatrixUniform, false, pMatrix);
+				glContext.uniformMatrix4fv(prg.mvMatrixUniform, false, mvMatrix);
+				
+				//sets Bezier control points
+				if (points.length == 12){
+					var p0 = [];
+					var p1 = [];
+					var p2 = [];
+					
+					p0.push(points[0], points[1]);
+					p1.push(points[3], points[4]);
+					p2.push(points[6], points[7]);
+			
+					glContext.uniform2fv(prg.p0Uniform, p0);	    
+					glContext.uniform2fv(prg.p1Uniform, p1);	    
+					glContext.uniform2fv(prg.p2Uniform, p2);	    
+				}
+				
+				//1. Sending vertices(1.1), colors(1.2), and indices(1.3) to the Vertex Shader;
+				//   then ask Vertex Shader to draw lines between vertices(1.4)
+				//1.1 Send the array of VERTEX specifying that they are each composed of 3 parameters 
+				glContext.bindBuffer(glContext.ARRAY_BUFFER, vertexBuffer);
+				glContext.vertexAttribPointer(prg.vertexPositionAttribute, 3, glContext.FLOAT, false, 0, 0);
+
+				//1.2 Send the array of COLOR specifying that they are each composed of 4 parameters
+				glContext.bindBuffer(glContext.ARRAY_BUFFER, colorBuffer);
+				glContext.vertexAttribPointer(prg.colorAttribute, 4, glContext.FLOAT, false, 0, 0);
+
+				//1.3 Send the array of INDEX (1 param. for each => no need of 'vertexAttribPointer')
+				glContext.bindBuffer(glContext.ELEMENT_ARRAY_BUFFER, indexBuffer);
+								
+				//1.4 Draw as line strip to approximate the bezier curve
+				glContext.drawElements(glContext.LINE_STRIP, indices.length, glContext.UNSIGNED_SHORT,0);
+				
+				//2. Sending vertices(1.1), colors(1.2), and indices(1.3) to the Vertex Shader;
+				//   then ask Vertex Shader to draw lines between vertices(1.4)
+				//2.1 Send control points data
+				glContext.bindBuffer(glContext.ARRAY_BUFFER, pointsBuffer);
+				glContext.vertexAttribPointer(prg.vertexPositionAttribute, 3, glContext.FLOAT, false, 0, 0);
+				
+				//2.2 Send indices data to the vertex shader
+				glContext.bindBuffer(glContext.ELEMENT_ARRAY_BUFFER, pointsIndexBuffer);
+				glContext.drawElements(glContext.POINTS, pointsIndices.length, glContext.UNSIGNED_SHORT, 0);
+			}
+			
+			/*******************************************************************************
+				Starting point!! 
+				Initializes webgl, shaders, buffers and starts rendering loop
+			********************************************************************************/
+			function initWebGL(){
+				glContext = getGLContext('webgl-canvas');
+				//Initializes the program (shaders).
+				initProgram();
+				//Initializes the buffers that we are going to use to draw polygons (vertex buffer, color and index buffer)
+				initBuffers();
+				//Starts rendering loop, calls drawScene
+				renderLoop();
+			}
+		</script>
+
+	</head>
+
+	<!-- HTML body -->
+	<body onload="initWebGL()">
+		<script>displayTitle("Eg06-02 : WebGL, Courbes quadratiques de Bezier", 0,1,1,1);</script>
+		<p>	Définir les trois points de contrôle en cliquant à trois endroits dans le canevas, puis pour modifier la courbe,
+utiliser les touches suivantes : ‘-’ pour réduire la résolution de la courbe ; ‘+’ pour l’augmenter ; ‘a’ et ‘d’ pour
+les mouvements horizontaux du point de contrôle central et similairement ‘w’ et ‘s’ pour l’axe vertical.
+		</p>
+		<!-- WebGL canvas -->	
+		<canvas id="webgl-canvas" width="500" height="500">
+			HTML5 is not supported
+		</canvas>
+	</body>
+
+
+	<!-- Second script block, gets mouse clicks and transforms html space coordinates to webgl coordinates
+		This block is separated because it needs the webgl canvas to be created first. 
+	-->
+	<script id='code-js' type="text/javascript">
+
+
+	function addPointOnGLScene(pX,pY){
+
+		if (points.length >= 12){
+			//resets points and related arrays
+			points = [];
+			pointsIndices = [];
+		}
+		
+		//adds a control point
+		points.push(pX,pY, 0.5);
+		
+		//adds a new, consecutive index 
+		pointsIndices.push(pointsIndices.length);
+				
+		//re-initializes the buffers to take the new vertex into account when rendering the scene
+		initBuffers();	
+	}
+
+	//correction required to eliminate offset on mouse coordinates
+	function getMousePos(canvas, evt) {
+			var rect = canvas.getBoundingClientRect();
+			return {
+			  x: evt.clientX - rect.left,
+			  y: evt.clientY - rect.top
+			};
+	}
+		  
+	//get a reference to the webgl canvas
+	var canvas = document.getElementById('webgl-canvas');
+	//add a call back for mouse click events on the webgl canvas
+	canvas.addEventListener('click', function(evt) {
+			//gets position of the click
+			var mousePos = getMousePos(canvas, evt);
+			//converts coordinates in html space (origin on upper left corner) 
+			//to world space (origin at the center of the viewport)
+			var pX = (mousePos.x - canvas.width/2.0) / canvas.width * 2.0;
+			var pY = (canvas.height/2.0 - mousePos.y) / canvas.height * 2.0;
+		   
+			//var message = 'point: ' + pX + ',' + pY;
+			//console.log(message);
+			
+			//sends point coordinates to the webgl scene
+			addPointOnGLScene(pX,pY);
+		  }, false);
+
+	</script>
+
+</html>
