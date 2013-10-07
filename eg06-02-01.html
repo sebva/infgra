@@ -200,6 +200,7 @@
 				glContext.uniformMatrix4fv(prg.mvMatrixUniform, false, mvMatrix);
 				
 				//sets Bezier control points
+				// 12 = 4 * 3 (4 points)
 				if (points.length == 12){
 					var p0 = [];
 					var p1 = [];
@@ -260,7 +261,7 @@
 
 	<!-- HTML body -->
 	<body onload="initWebGL()">
-		<script>displayTitle("Eg06-02 : WebGL, Courbes quadratiques de Bezier", 0,1,1,1);</script>
+		<script>displayTitle("Eg06-02-01 : WebGL, Courbes quadratiques de Bezier", 0,1,1,1);</script>
 		<p>	Définir les trois points de contrôle en cliquant à trois endroits dans le canevas, puis pour modifier la courbe,
 utiliser les touches suivantes : ‘-’ pour réduire la résolution de la courbe ; ‘+’ pour l’augmenter ; ‘a’ et ‘d’ pour
 les mouvements horizontaux du point de contrôle central et similairement ‘w’ et ‘s’ pour l’axe vertical.
@@ -280,6 +281,7 @@ les mouvements horizontaux du point de contrôle central et similairement ‘w�
 
 	function addPointOnGLScene(pX,pY){
 
+		// 12 = 4 * 3 (4 points)
 		if (points.length >= 12){
 			//resets points and related arrays
 			points = [];

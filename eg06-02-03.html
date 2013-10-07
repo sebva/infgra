@@ -22,7 +22,7 @@
 			uniform mat4 uPMatrix;
 			varying vec4 vColor;
 			
-			//points defined by the user (mouse clicks) are the 3 control points of the quadratic Bezier
+			//points defined by the user (mouse clicks) are the 4 control points of the cubic Bezier
 			uniform vec2 uP0;
 			uniform vec2 uP1;
 			uniform vec2 uP2;
@@ -38,7 +38,7 @@
 					vColor = vec4(1.0, 0.0, 0.0, 1.0);
 					gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
 				}else{
-					//vertex position is calculated according to the quadratic Bezier formula
+					//vertex position is calculated according to the cubic Bezier formula
 					float t = aVertexPosition.x;
                     vec2 B_t = (1.0 -t)*(1.0 -t)*(1.0-t) * uP0 + 3.0*(1.0-t)*(1.0-t)*t*uP1 + 3.0*(1.0-t)*t*t*uP2 + t*t*t*uP3;
 				
@@ -202,7 +202,9 @@
 				glContext.uniformMatrix4fv(prg.mvMatrixUniform, false, mvMatrix);
 				
 				//sets Bezier control points
+				// 12 = 4 * 3 (4 points)
 				if (points.length == 12){
+					// There are now 4 control points (cubic Bezier)
 					var p0 = [];
 					var p1 = [];
 					var p2 = [];
@@ -265,8 +267,8 @@
 
 	<!-- HTML body -->
 	<body onload="initWebGL()">
-		<script>displayTitle("Eg06-02 : WebGL, Courbes quadratiques de Bezier", 0,1,1,1);</script>
-		<p>	Définir les trois points de contrôle en cliquant à trois endroits dans le canevas, puis pour modifier la courbe,
+		<script>displayTitle("Eg06-02-03 : WebGL, Courbes cubiques de Bezier", 0,1,1,1);</script>
+		<p>	Définir les quatre points de contrôle en cliquant à trois endroits dans le canevas, puis pour modifier la courbe,
 utiliser les touches suivantes : ‘-’ pour réduire la résolution de la courbe ; ‘+’ pour l’augmenter ; ‘a’ et ‘d’ pour
 les mouvements horizontaux du point de contrôle central et similairement ‘w’ et ‘s’ pour l’axe vertical.
 		</p>
@@ -284,7 +286,7 @@ les mouvements horizontaux du point de contrôle central et similairement ‘w�
 
 
 	function addPointOnGLScene(pX,pY){
-
+		// 12 = 4 * 3 (4 points)
 		if (points.length >= 12){
 			//resets points and related arrays
 			points = [];

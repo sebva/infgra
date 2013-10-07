@@ -169,6 +169,7 @@
 				pointsBuffer = getVertexBufferWithVertices(points);
 			}
             
+			// every possible combination of points that form a 3-point Bezier curve
             var pointsOrder = [
                 [ 0, 1, 2 ],
                 [ 0, 2, 1 ],
@@ -183,6 +184,7 @@
                 [ 2, 1, 3 ],
                 [ 1, 3, 2 ]
             ];
+			// Index of the above array
             var pointsOrderIndex = 0;
 
 			/*
@@ -216,17 +218,20 @@
 				glContext.uniformMatrix4fv(prg.mvMatrixUniform, false, mvMatrix);
 				
 				//sets Bezier control points
+				// 12 = 4 * 3 (4 points)
 				if (points.length == 12){
 					var p0 = [];
 					var p1 = [];
 					var p2 = [];
                     
+					// array that contains the x and y coordinates of the points to connect
                     var p = [
                         [points[0], points[1]],
                         [points[3], points[4]],
                         [points[6], points[7]],
                         [points[9], points[10]]
                     ];
+					//the order in which the points are connected
 					var order = pointsOrder[pointsOrderIndex];
                     
 					p0.push(p[order[0]][0], p[order[0]][1]);
@@ -284,7 +289,7 @@
 
 	<!-- HTML body -->
 	<body onload="initWebGL()">
-		<script>displayTitle("Eg06-02 : WebGL, Courbes quadratiques de Bezier", 0,1,1,1);</script>
+		<script>displayTitle("Eg06-02-02 : WebGL, Courbes quadratiques de Bezier", 0,1,1,1);</script>
 		<p>	Définir les trois points de contrôle en cliquant à trois endroits dans le canevas, puis pour modifier la courbe,
 utiliser les touches suivantes : ‘-’ pour réduire la résolution de la courbe ; ‘+’ pour l’augmenter ; ‘a’ et ‘d’ pour
 les mouvements horizontaux du point de contrôle central et similairement ‘w’ et ‘s’ pour l’axe vertical.
@@ -304,6 +309,7 @@ les mouvements horizontaux du point de contrôle central et similairement ‘w�
 
 	function addPointOnGLScene(pX,pY){
 
+		// 12 = 4 * 3
 		if (points.length >= 12){
 			//resets points and related arrays
 			points = [];
@@ -346,9 +352,12 @@ les mouvements horizontaux du point de contrôle central et similairement ‘w�
 			//sends point coordinates to the webgl scene
 			addPointOnGLScene(pX,pY);
 		  }, false);
+
+	// on right click
     canvas.addEventListener('contextmenu', function(evt) {
             evt.preventDefault();
             
+			// increments the index pointing at the current points order
             pointsOrderIndex++;
             if(pointsOrderIndex >= pointsOrder.length)
                 pointsOrderIndex = 0;
