@@ -1,0 +1,267 @@
+<!doctype html>
+
+<html>
+	<head>
+		<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+		<!-- Definition of style sheet format, especially for the WebGL canevas: -->
+		<link rel="stylesheet" href="css/stylesheet.css">
+
+		<!-- External JavaScript (JS) sources: -->
+		<script src="js/commonFunctions.js"></script>	<!-- Example external source -->
+		<script src='js/gl-matrix-min.js'></script>		<!-- Matrix Library -->
+		<script src='js/webglTools.js'></script>		<!-- Basic WebGL initialization tools -->
+
+		<!-- *** Vertex Shader ***
+		  -- Applies projection and model-view transformations to each vertex -->
+		<script id="shader-vs" type="x-shader/x-vertex">
+			attribute vec3 aVertexPosition;
+			attribute vec4 aColor;
+		    uniform mat4 uMVMatrix;
+		    uniform mat4 uPMatrix;
+			varying vec4 vColor;
+			
+		    void main(void) {
+		        vColor = aColor; 
+				gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+			}
+		</script>
+		
+		<!-- *** Fragment Shader ***
+		  -- Sets the pixel color using the "aColor" attribute -->
+		<script id="shader-fs" type="x-shader/x-fragment">
+			#ifdef GL_ES
+				precision highp float;
+			#endif
+
+			varying vec4 vColor;
+			void main(void) {
+		   		gl_FragColor = vColor;
+			}
+		</script>
+
+		<script>
+			var sphereDivisions = 6 //resolution of the sphere, number of subdivisions
+			var rotY = 0 //rotation on the Y-axis (in degrees) applied to the sphere
+			var rotX = 0 //rotation on the X-axis (in degrees) applied to the sphere
+			window.onkeydown = checkKey;
+
+			var filledTrianglesRendering = false; // to make the surface appear/disappear
+
+			// Buffers to send data to the graphics card (vertices, indices, color per vertex)
+			var vertexBuffer = null;
+			var indexBuffer = null;
+			var colorBuffer = null;
+
+			var indices = [];  //JavaScript array to store the indices of the curve
+			var vertices = []; //JavaScript array to store the vertices of the curve
+			var colors = [];   //JavaScript array to store the color assigned to each vertex
+
+			
+			var mvMatrix = mat4.create(); // The Model-View matrix
+			var pMatrix = mat4.create(); // The projection matrix
+
+			// utility function to convert degrees to radians
+			function degToRad(degrees){
+				return degrees * Math.PI / 180;
+			}
+			
+			function checkKey(ev){
+				switch(ev.keyCode){
+					case 173: // '-' key (from keyboard)
+					case 109:{ // '-' key (from number pad)
+						if (sphereDivisions >1) --sphereDivisions;
+						console.log( sphereDivisions );
+						initBuffers();
+						break;
+					}
+					case 49: // '+' key (from keyboard)
+					case 107:{ // '+' key (from number pad)
+						if (sphereDivisions <50) ++sphereDivisions;
+						console.log( sphereDivisions );
+						initBuffers();
+						break;
+					}
+					case 65:{ // 'a' key
+						rotY -= 2.0;
+						break;
+					}
+					case 68:{ // 'd' key
+						rotY += 2.0; 
+						break;
+					}
+					case 87:{ // 'w' key
+						rotX -= 2.0;
+						break;
+					}
+					case 83:{ // 's' key
+						rotX += 2.0; 
+						break;
+					}
+					case 84:{ // 't' key
+						filledTrianglesRendering= !filledTrianglesRendering;
+						break;
+					}
+					default:
+					  console.log(ev.keyCode); //--- DEBUG LINE ---
+					break;
+				}
+			}
+
+			//this function is called from initProgram() which is defined in webglTools.js, it is implemented here for clarity
+			function initShaderParameters(prg){
+				//The following lines get a reference to the uniforms and attributes defined in the shaders.
+				//This is a necessary step as the shaders are NOT written in JavaScript but in a 
+				//specialized language called GLSL.
+				
+				//--- Information for the Vertex Shader ---
+				prg.vertexPositionAttribute = glContext.getAttribLocation(prg, "aVertexPosition");
+			    glContext.enableVertexAttribArray(prg.vertexPositionAttribute);
+			    
+			    prg.colorAttribute 			= glContext.getAttribLocation(prg, "aColor");
+			    glContext.enableVertexAttribArray(prg.colorAttribute);
+			    
+			    prg.pMatrixUniform          = glContext.getUniformLocation(prg, 'uPMatrix');
+			    prg.mvMatrixUniform         = glContext.getUniformLocation(prg, 'uMVMatrix');
+				
+				//--- Information for the Fragment Shader ---
+				// <none>
+			}
+
+			//initializes buffers: sends data from the javascript arrays to the graphics card
+			function initBuffers(){
+				indices = [];
+				vertices = [];
+				
+				var latitudeBands = sphereDivisions;
+			    var longitudeBands = sphereDivisions;
+			    var radius = 0.8;
+			    
+			    // creation of the sphere structure using polar coordinates
+			    for (var latNumber=0; latNumber <= latitudeBands; ++latNumber) 
+			    {
+			        var theta = latNumber * Math.PI / latitudeBands;
+			        var sinTheta = Math.sin(theta);
+			        var cosTheta = Math.cos(theta);
+			
+			        for (var longNumber=0; longNumber <= longitudeBands; ++longNumber) 
+			        {
+			            var phi = longNumber * 2.0 * Math.PI / longitudeBands;
+			            var sinPhi = Math.sin(phi);
+			            var cosPhi = Math.cos(phi);
+			
+			            var x = cosPhi * sinTheta;
+			            var y = cosTheta;
+			            var z = sinPhi * sinTheta;
+			            
+			            vertices.push(radius * x);
+			            vertices.push(radius * y);
+			            vertices.push(radius * z);
+			            
+			            //color values depend on current latitude and longitude
+			            colors.push(longNumber/longitudeBands, latNumber/latitudeBands, 0.5, 1.0);
+			        }
+			    }
+			
+			    for (var latNumber=0; latNumber < latitudeBands; latNumber++) 
+			    {
+			        for (var longNumber=0; longNumber < longitudeBands; longNumber++) 
+			        {
+			            var first = (latNumber * (longitudeBands + 1)) + longNumber;
+			            var second = first + longitudeBands + 1;
+			            indices.push(first);
+			            indices.push(second);
+			            indices.push(first + 1);
+			
+			            indices.push(second);
+			            indices.push(second + 1);
+			            indices.push(first + 1);
+			        }
+			    }
+			    
+			    console.log("indices: "+indices.length+" vertices: "+vertices.length);
+				vertexBuffer = getVertexBufferWithVertices(vertices);
+				indexBuffer = getIndexBufferWithIndices(indices);
+				colorBuffer = getVertexBufferWithVertices(colors);
+			}
+
+
+			/*
+			* Draws the scene
+			*/
+			function drawScene(){
+				//light grey background
+				glContext.clearColor(0.9, 0.9, 1.0, 1.0); // #EEEEFF
+				
+				//activate z-buffer
+				glContext.enable(glContext.DEPTH_TEST);
+				
+				//resets color and depth buffer before drawing
+				glContext.clear(glContext.COLOR_BUFFER_BIT | glContext.DEPTH_BUFFER_BIT);
+				
+				//defines viewport dimensions based on the webgl canvas size
+				glContext.viewport(0, 0, c_width, c_height);
+						
+				//orthographic projection : left, right, bottom, top, near, far, dest
+			    mat4.ortho(-1, 1, -1, 1 , -1, 1, pMatrix);
+			    
+			    //this example applies a rotation on the X and Y axes
+				mat4.identity(mvMatrix);
+			    mat4.rotate(mvMatrix, degToRad(rotY), [0, 1, 0]);
+			    mat4.rotate(mvMatrix, degToRad(rotX), [1, 0, 0]);
+
+				//send the projection and model view matrices to the vertex shader
+			    glContext.uniformMatrix4fv(prg.pMatrixUniform, false, pMatrix);
+			    glContext.uniformMatrix4fv(prg.mvMatrixUniform, false, mvMatrix);	
+			    			
+				//1. Sending vertices(1.1), colors(1.2), and indices(1.3) to the Vertex Shader;
+				//   then ask Vertex Shader to draw lines between vertices(1.4)
+				//1.1 Send the array of VERTEX specifying that they are each composed of 3 parameters 
+				glContext.bindBuffer(glContext.ARRAY_BUFFER, vertexBuffer);
+				glContext.vertexAttribPointer(prg.vertexPositionAttribute, 3, glContext.FLOAT, false, 0, 0);
+
+				//1.2 Send the array of COLOR specifying that they are each composed of 4 parameters
+				glContext.bindBuffer(glContext.ARRAY_BUFFER, colorBuffer);
+				glContext.vertexAttribPointer(prg.colorAttribute, 4, glContext.FLOAT, false, 0, 0);
+
+				//1.3 Send the array of INDEX (1 param. for each => no need of 'vertexAttribPointer')
+				glContext.bindBuffer(glContext.ELEMENT_ARRAY_BUFFER, indexBuffer);
+								
+				//1.4 Draw the approximation of the sphere as line strip to approximate the sphere
+				if( filledTrianglesRendering )
+					glContext.drawElements(glContext.TRIANGLES, indices.length, glContext.UNSIGNED_SHORT,0);
+				else
+					glContext.drawElements(glContext.LINE_STRIP, indices.length, glContext.UNSIGNED_SHORT,0);				
+			}
+			
+			/*******************************************************************************
+				Starting point!! 
+				Initializes webgl, shaders, buffers and starts rendering loop
+			********************************************************************************/
+			function initWebGL(){
+				glContext = getGLContext('webgl-canvas');
+				//Initializes the program (shaders).
+				initProgram();
+				//Initializes the buffers that we are going to use to draw polygons (vertex buffer, color and index buffer)
+				initBuffers();
+				//Starts rendering loop, calls drawScene
+				renderLoop();
+			}
+		</script>
+
+	</head>
+
+	<!-- HTML body -->
+	<body onload="initWebGL()">
+		<script>displayTitle("Eg06-03-a : WebGL sphère, approche naïve avec des coordonnées polaires", 0,1,1,1);</script>
+		<p>	Utiliser les touches : '-' pour réduire la résolution ; '+' pour l'augmenter ; 'a' et 'd' pour appliquer une rotation autour de l'axe Y ; 'w' et 's' pour une rotation autour de l'axe X ; 't' pour faire apparaitre et disparaitre les triangles.
+		</p>
+		<!-- WebGL canvas -->	
+		<canvas id="webgl-canvas" width="500" height="500">
+			HTML5 is not supported
+		</canvas>
+	</body>
+
+
+
+
+</html>

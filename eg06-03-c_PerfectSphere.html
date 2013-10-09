@@ -1,0 +1,216 @@
+<!doctype html>
+
+<html>
+	<head>
+		<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+		<!-- Definition of style sheet format, especially for the WebGL canevas: -->
+		<link rel="stylesheet" href="css/stylesheet.css">
+
+		<!-- External JavaScript (JS) sources: -->
+		<script src="js/commonFunctions.js"></script>	<!-- Example external source -->
+		<script src='js/gl-matrix-min.js'></script>		<!-- Matrix Library -->
+		<script src='js/webglTools.js'></script>		<!-- Basic WebGL initialization tools -->
+
+		<!-- *** Vertex Shader ***
+		  -- Applies projection and model-view transformations to each vertex -->
+		<script id="shader-vs" type="x-shader/x-vertex">
+			attribute vec3 aVertexPosition;
+			attribute vec4 aColor;
+		    uniform mat4 uMVMatrix;
+		    uniform mat4 uPMatrix;
+			varying vec4 vColor;
+			varying vec4 vPosition;
+			
+		    void main(void) {
+				gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+				vColor = aColor;
+				vPosition = gl_Position;
+			}
+		</script>
+		
+		<!-- *** Fragment Shader ***
+		  -- Sets the pixel color using the "aColor" attribute -->
+		<script id="shader-fs" type="x-shader/x-fragment">
+			#ifdef GL_ES
+				precision highp float;
+			#endif
+			varying vec4 vPosition;
+			varying vec4 vColor;
+			
+			void main(void) {
+				float radius = 0.7;
+				float half_pi = 1.5708;
+				float dist = sqrt(vPosition.x * vPosition.x + vPosition.y * vPosition.y) / radius;
+			
+				vec4 finalColor = vec4 (1.0, 1.0, 1.0, 1.0);
+				
+				if (dist <= 1.0){
+					vec3 ambientColor = vec3(0.1,0.1,0.3);
+					vec3 diffuseColor = vColor.xyz * cos(dist*half_pi);
+					vec3 specularColor = vColor.xyz * 0.06/sin(dist*half_pi);
+					
+//					finalColor = vec4(ambientColor, 1.0); //--- ambient light only --
+//					finalColor = vec4(diffuseColor, 1.0); //--- diffuse light only --
+//					finalColor = vec4(specularColor, 1.0); //--- specular light only --
+					finalColor = vec4(ambientColor + diffuseColor + specularColor, 1.0);
+				}
+		   		gl_FragColor = finalColor;	
+			}
+		</script>
+
+		<script>
+			var rotY = 0; //rotation on the Y-axis (in degrees) 
+			var rotX = 0; //rotation on the X-axis (in degrees) 
+			
+			// Buffers to send data to the graphics card (vertices, indices, color per vertex)
+			var vertexBuffer = null;
+			var indexBuffer = null;
+			var colorBuffer = null;
+
+			var indices = []; //JavaScript array to store the indices of the polygon
+			var vertices = []; //JavaScript array to store the vertices of the polygon
+			var colors = []; //JavaScript array to store the color assigned to each vertex
+			var indexCnt = 0; //keeps count of number of triangles in the subdivision surface
+			
+			var mvMatrix = mat4.create(); // The Model-View matrix
+			var pMatrix = mat4.create(); // The projection matrix
+
+			window.onkeydown = checkKey;
+			
+			function checkKey(ev){
+				console.log(ev.keyCode);
+				switch(ev.keyCode){
+					case 189: // '-' key on mac keyboard
+					case 173: // '-' key (from keyboard)
+					case 109: // '-' key (from number pad)
+					default:
+					  //console.log(ev.keyCode); //--- DEBUG LINE ---
+					break;
+				}
+			}
+			
+			//utiliy function to convert degrees to radians
+			function degToRad(degrees){
+				return( degrees * Math.PI / 180.0 );
+			}
+
+			//this function is called from initProgram() which is defined in webglTools.js, it is implemented here for clarity
+			function initShaderParameters(prg){
+				//The following lines get a reference to the uniforms and attributes defined in the shaders.
+				//This is a necessary step as the shaders are NOT written in JavaScript but in a 
+				//specialized language called GLSL.
+				
+				//--- Information for the Vertex Shader ---
+				prg.vertexPositionAttribute = glContext.getAttribLocation(prg, "aVertexPosition");
+			    glContext.enableVertexAttribArray(prg.vertexPositionAttribute);
+			    
+			    prg.colorAttribute 			= glContext.getAttribLocation(prg, "aColor");
+			    glContext.enableVertexAttribArray(prg.colorAttribute);
+			    
+			    prg.pMatrixUniform          = glContext.getUniformLocation(prg, 'uPMatrix');
+			    prg.mvMatrixUniform         = glContext.getUniformLocation(prg, 'uMVMatrix');
+				
+				//--- Information for the Fragment Shader ---
+				// <none>
+			}
+			
+			
+			//initializes buffers: sends data from the javascript arrays to the graphics card
+			function initBuffers(){
+
+				indices = [];
+				vertices = [];
+				colors = [];
+				
+				indices.push(0,1,3,2);
+				
+				colors.push(0.0, 0.5, 1.0, 1.0,
+							0.0, 0.5, 1.0, 1.0,
+							0.0, 0.5, 1.0, 1.0,
+							0.0, 0.5, 1.0, 1.0);
+							
+				vertices.push(-0.7, -0.7, 0.0,
+							   0.7, -0.7, 0.0,
+							   0.7,  0.7, 0.0,
+							  -0.7,  0.7, 0.0);
+				
+				vertexBuffer = getVertexBufferWithVertices(vertices);					
+				indexBuffer = getIndexBufferWithIndices(indices);
+				colorBuffer = getVertexBufferWithVertices(colors);
+			}
+
+
+			/*
+			* Draws the scene
+			*/
+			function drawScene(){
+				//light grey background
+				glContext.clearColor(0.9, 0.9, 1.0, 1.0); // #EEEEFF
+				
+				//activate z-buffer
+				glContext.enable(glContext.DEPTH_TEST);
+				
+				//resets color and depth buffer before drawing
+				glContext.clear(glContext.COLOR_BUFFER_BIT | glContext.DEPTH_BUFFER_BIT);
+				
+				//defines viewport dimensions based on the webgl canvas size
+				glContext.viewport(0, 0, c_width, c_height);
+						
+				//orthographic projection : left, right, bottom, top, near, far, dest
+			    mat4.ortho(-1, 1, -1, 1 , 1, -1, pMatrix);
+			    
+			    //this example applies a rotation on the X and Y axes
+				mat4.identity(mvMatrix);
+			    mat4.rotate(mvMatrix, degToRad(rotY), [0, 1, 0]);
+			    mat4.rotate(mvMatrix, degToRad(rotX), [1, 0, 0]);
+
+				//send the projection and model view matrices to the vertex shader
+			    glContext.uniformMatrix4fv(prg.pMatrixUniform, false, pMatrix);
+			    glContext.uniformMatrix4fv(prg.mvMatrixUniform, false, mvMatrix);	
+			    	
+				//1. Sending vertices(1.1), colors(1.2), and indices(1.3) to the Vertex Shader;
+				//   then ask Vertex Shader to draw lines between vertices(1.4)
+				//1.1 Send the array of VERTEX specifying that they are each composed of 3 parameters 
+				glContext.bindBuffer(glContext.ARRAY_BUFFER, vertexBuffer);
+				glContext.vertexAttribPointer(prg.vertexPositionAttribute, 3, glContext.FLOAT, false, 0, 0);
+
+				//1.2 Send the array of COLOR specifying that they are each composed of 4 parameters
+				glContext.bindBuffer(glContext.ARRAY_BUFFER, colorBuffer);
+				glContext.vertexAttribPointer(prg.colorAttribute, 4, glContext.FLOAT, false, 0, 0);
+
+				//1.3 Send the array of INDEX (1 param. for each => no need of 'vertexAttribPointer')
+				glContext.bindBuffer(glContext.ELEMENT_ARRAY_BUFFER, indexBuffer);
+								
+				//1.4 Draw as line strip to approximate the sphere
+				glContext.drawElements(glContext.TRIANGLE_STRIP, indices.length, glContext.UNSIGNED_SHORT,0);
+			
+			}
+			
+			/*******************************************************************************
+				Starting point!! 
+				Initializes WebGL, Shaders, buffers and starts rendering loop
+			********************************************************************************/
+			function initWebGL(){
+				glContext = getGLContext('webgl-canvas');
+				//Initializes the program (Shaders).
+				initProgram();
+				//Initializes the buffers that we are going to use to draw polygons (vertex buffer, color and index buffer)
+				initBuffers();
+				//Starts rendering loop, calls drawScene
+				renderLoop();
+			}
+		</script>
+
+	</head>
+
+	<!-- HTML body -->
+	<body onload="initWebGL()">
+		<script>displayTitle("Eg06-03-c : sphère parfaite avec Phong (approche naïve)", 0,1,1,1);</script>
+		<p>	Actuellement sans interaction utilisateur.
+		</p>
+		<!-- WebGL canvas -->	
+		<canvas id="webgl-canvas" width="500" height="500">
+			HTML5 is not supported
+		</canvas>
+	</body>
+</html>
