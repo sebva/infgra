@@ -38,10 +38,26 @@
 			varying vec4 vColor;
 			
 			void main(void) {
-				float radius = 0.7;
+				float radius = 0.5;
 				float half_pi = 1.5708;
-				float dist = sqrt(vPosition.x * vPosition.x + vPosition.y * vPosition.y) / radius;
+				//float dist = sqrt((vPosition.x) * (vPosition.x) + (vPosition.y) * (vPosition.y)) / radius;
+                
+                float dist = 0.0;
+                
+                if (vPosition.x < 0.0 && vPosition.x > -1.0 && vPosition.y < 0.0 && vPosition.y > -1.0) {
+                    dist = sqrt((vPosition.x+0.5) * (vPosition.x+0.5) + (vPosition.y+0.5) * (vPosition.y+0.5)) / radius;
+                }
+                
+                if (vPosition.x > 0.0 && vPosition.x < 1.0 && vPosition.y > 0.0 && vPosition.y < 1.0) {
+                    dist = sqrt((vPosition.x-0.5) * (vPosition.x-0.5) + (vPosition.y-0.5) * (vPosition.y-0.5)) / radius;
+                }
+                
+                
+                if (vPosition.x > 0.0 && vPosition.x < 1.0 && vPosition.y < 0.0 && vPosition.y > -1.0) {
+                    dist = sqrt((vPosition.x-0.5) * (vPosition.x-0.5) + (vPosition.y+0.5) * (vPosition.y+0.5)) / radius;
+                }
 			
+                
 				vec4 finalColor = vec4 (1.0, 1.0, 1.0, 1.0);
 				
 				if (dist <= 1.0){
@@ -64,11 +80,13 @@
 			
 			// Buffers to send data to the graphics card (vertices, indices, color per vertex)
 			var vertexBuffer = null;
+            var vertexBuffer2 = null;
 			var indexBuffer = null;
 			var colorBuffer = null;
 
 			var indices = []; //JavaScript array to store the indices of the polygon
 			var vertices = []; //JavaScript array to store the vertices of the polygon
+            var vertices2 = [];
 			var colors = []; //JavaScript array to store the color assigned to each vertex
 			var indexCnt = 0; //keeps count of number of triangles in the subdivision surface
 			
@@ -120,21 +138,42 @@
 
 				indices = [];
 				vertices = [];
+                vertices2 = [];
 				colors = [];
 				
-				indices.push(0,1,3,2);
+				indices.push(0,1,3,2,4,5,7,6,8,9,11,10);
 				
 				colors.push(0.0, 0.5, 1.0, 1.0,
 							0.0, 0.5, 1.0, 1.0,
 							0.0, 0.5, 1.0, 1.0,
+							0.0, 0.5, 1.0, 1.0,
+                            
+                            0.0, 0.5, 1.0, 1.0,
+							0.0, 0.5, 1.0, 1.0,
+							0.0, 0.5, 1.0, 1.0,
+							0.0, 0.5, 1.0, 1.0,
+                            
+                            0.0, 0.5, 1.0, 1.0,
+							0.0, 0.5, 1.0, 1.0,
+							0.0, 0.5, 1.0, 1.0,
 							0.0, 0.5, 1.0, 1.0);
 							
-				vertices.push(-0.7, -0.7, 0.0,
-							   0.7, -0.7, 0.0,
-							   0.7,  0.7, 0.0,
-							  -0.7,  0.7, 0.0);
+				vertices.push(-1.0, -1.0, 0.0,
+							   0.0, -1.0, 0.0,
+							   0.0,  0.0, 0.0,
+							  -1.0,  0.0, 0.0,
+                              
+                              0.0, -1.0, 0.0,
+                              1.0, -1.0, 0.0,
+                              0.0,  0.0, 0.0,
+                              1.0,  0.0, 0.0,
+                              
+                              0.0, 1.0, 0.0,
+                              1.0, 1.0, 0.0,
+                              0.0,  0.0, 0.0,
+                              1.0,  0.0, 0.0);
 				
-				vertexBuffer = getVertexBufferWithVertices(vertices);					
+				vertexBuffer = getVertexBufferWithVertices(vertices);
 				indexBuffer = getIndexBufferWithIndices(indices);
 				colorBuffer = getVertexBufferWithVertices(colors);
 			}
@@ -172,6 +211,7 @@
 				//   then ask Vertex Shader to draw lines between vertices(1.4)
 				//1.1 Send the array of VERTEX specifying that they are each composed of 3 parameters 
 				glContext.bindBuffer(glContext.ARRAY_BUFFER, vertexBuffer);
+                //glContext.bindBuffer(glContext.ARRAY_BUFFER, vertexBuffer2);
 				glContext.vertexAttribPointer(prg.vertexPositionAttribute, 3, glContext.FLOAT, false, 0, 0);
 
 				//1.2 Send the array of COLOR specifying that they are each composed of 4 parameters
