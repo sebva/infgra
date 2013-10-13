@@ -16,15 +16,19 @@
 		<script id="shader-vs" type="x-shader/x-vertex">
 			attribute vec3 aVertexPosition;
 			attribute vec4 aColor;
+            attribute float aRadius;
 		    uniform mat4 uMVMatrix;
 		    uniform mat4 uPMatrix;
 			varying vec4 vColor;
 			varying vec4 vPosition;
+            varying float vRadius;
+            
 			
 		    void main(void) {
 				gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
 				vColor = aColor;
 				vPosition = gl_Position;
+                vRadius = aRadius;
 			}
 		</script>
 		
@@ -36,26 +40,28 @@
 			#endif
 			varying vec4 vPosition;
 			varying vec4 vColor;
+            varying float vRadius;
 			
 			void main(void) {
-				float radius = 0.5;
+                
 				float half_pi = 1.5708;
-				//float dist = sqrt((vPosition.x) * (vPosition.x) + (vPosition.y) * (vPosition.y)) / radius;
                 
                 float dist = 0.0;
                 
                 if (vPosition.x < 0.0 && vPosition.x > -1.0 && vPosition.y < 0.0 && vPosition.y > -1.0) {
-                    dist = sqrt((vPosition.x+0.5) * (vPosition.x+0.5) + (vPosition.y+0.5) * (vPosition.y+0.5)) / radius;
+                    dist = sqrt((vPosition.x+0.5) * (vPosition.x+0.5) + (vPosition.y+0.5) * (vPosition.y+0.5)) / vRadius;
                 }
                 
                 if (vPosition.x > 0.0 && vPosition.x < 1.0 && vPosition.y > 0.0 && vPosition.y < 1.0) {
-                    dist = sqrt((vPosition.x-0.5) * (vPosition.x-0.5) + (vPosition.y-0.5) * (vPosition.y-0.5)) / radius;
+                    dist = sqrt((vPosition.x-0.5) * (vPosition.x-0.5) + (vPosition.y-0.5) * (vPosition.y-0.5)) / vRadius;
                 }
                 
                 
                 if (vPosition.x > 0.0 && vPosition.x < 1.0 && vPosition.y < 0.0 && vPosition.y > -1.0) {
-                    dist = sqrt((vPosition.x-0.5) * (vPosition.x-0.5) + (vPosition.y+0.5) * (vPosition.y+0.5)) / radius;
+                    dist = sqrt((vPosition.x-0.5) * (vPosition.x-0.5) + (vPosition.y+0.5) * (vPosition.y+0.5)) / vRadius;
                 }
+                
+                
 			
                 
 				vec4 finalColor = vec4 (1.0, 1.0, 1.0, 1.0);
@@ -66,11 +72,11 @@
 					vec3 specularColor = vColor.xyz * 0.06/sin(dist*half_pi);
 					
 //					finalColor = vec4(ambientColor, 1.0); //--- ambient light only --
-//					finalColor = vec4(diffuseColor, 1.0); //--- diffuse light only --
-//					finalColor = vec4(specularColor, 1.0); //--- specular light only --
-					finalColor = vec4(ambientColor + diffuseColor + specularColor, 1.0);
+                    finalColor = vec4(diffuseColor, 1.0); //--- diffuse light only --
+					//finalColor = vec4(specularColor, 1.0); //--- specular light only --
+					//finalColor = vec4(ambientColor + diffuseColor + specularColor, 1.0);
 				}
-		   		gl_FragColor = finalColor;	
+		   		gl_FragColor = finalColor;
 			}
 		</script>
 
@@ -80,13 +86,13 @@
 			
 			// Buffers to send data to the graphics card (vertices, indices, color per vertex)
 			var vertexBuffer = null;
-            var vertexBuffer2 = null;
 			var indexBuffer = null;
 			var colorBuffer = null;
+            var radiusBuffer = null;
 
 			var indices = []; //JavaScript array to store the indices of the polygon
 			var vertices = []; //JavaScript array to store the vertices of the polygon
-            var vertices2 = [];
+            var radiuses = [];
 			var colors = []; //JavaScript array to store the color assigned to each vertex
 			var indexCnt = 0; //keeps count of number of triangles in the subdivision surface
 			
@@ -121,12 +127,16 @@
 				//--- Information for the Vertex Shader ---
 				prg.vertexPositionAttribute = glContext.getAttribLocation(prg, "aVertexPosition");
 			    glContext.enableVertexAttribArray(prg.vertexPositionAttribute);
+                
+                prg.radiusAttribute = glContext.getAttribLocation(prg, "aRadius");
+                glContext.enableVertexAttribArray(prg.radiusAttribute);
 			    
 			    prg.colorAttribute 			= glContext.getAttribLocation(prg, "aColor");
 			    glContext.enableVertexAttribArray(prg.colorAttribute);
 			    
 			    prg.pMatrixUniform          = glContext.getUniformLocation(prg, 'uPMatrix');
 			    prg.mvMatrixUniform         = glContext.getUniformLocation(prg, 'uMVMatrix');
+                
 				
 				//--- Information for the Fragment Shader ---
 				// <none>
@@ -139,6 +149,7 @@
 				indices = [];
 				vertices = [];
 				colors = [];
+                radiuses = [];
 				
 				indices.push(0,1,3,2,4,5,7,6,8,9,11,10);
 				
@@ -171,10 +182,14 @@
                               1.0, 1.0, 0.0,
                               0.0,  0.0, 0.0,
                               1.0,  0.0, 0.0);
+                              
+                radiuses.push(0.2,0.2,0.2);
+                
 				
 				vertexBuffer = getVertexBufferWithVertices(vertices);
 				indexBuffer = getIndexBufferWithIndices(indices);
 				colorBuffer = getVertexBufferWithVertices(colors);
+                radiusBuffer = getVertexBufferWithVertices(radiuses);
 			}
 
 
@@ -210,12 +225,14 @@
 				//   then ask Vertex Shader to draw lines between vertices(1.4)
 				//1.1 Send the array of VERTEX specifying that they are each composed of 3 parameters 
 				glContext.bindBuffer(glContext.ARRAY_BUFFER, vertexBuffer);
-                //glContext.bindBuffer(glContext.ARRAY_BUFFER, vertexBuffer2);
 				glContext.vertexAttribPointer(prg.vertexPositionAttribute, 3, glContext.FLOAT, false, 0, 0);
 
 				//1.2 Send the array of COLOR specifying that they are each composed of 4 parameters
 				glContext.bindBuffer(glContext.ARRAY_BUFFER, colorBuffer);
 				glContext.vertexAttribPointer(prg.colorAttribute, 4, glContext.FLOAT, false, 0, 0);
+                
+                glContext.bindBuffer(glContext.ELEMENT_ARRAY_BUFFER, radiusBuffer);
+                glContext.vertexAttribPointer(prg.radiusAttribute, 1, glContext.FLOAT, false, 0,0);
 
 				//1.3 Send the array of INDEX (1 param. for each => no need of 'vertexAttribPointer')
 				glContext.bindBuffer(glContext.ELEMENT_ARRAY_BUFFER, indexBuffer);
