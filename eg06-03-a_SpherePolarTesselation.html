@@ -58,6 +58,8 @@
 
 			
 			var mvMatrix = mat4.create(); // The Model-View matrix
+			var rotMatrix = mat4.create(); // The rotation matrix, set to identity every time we draw the sphere
+			mat4.identity(mvMatrix); // At the beginning, there aren't any rotation applied to the sphere
 			var pMatrix = mat4.create(); // The projection matrix
 
 			// utility function to convert degrees to radians
@@ -184,7 +186,7 @@
 				colorBuffer = getVertexBufferWithVertices(colors);
 			}
 
-
+			
 			/*
 			* Draws the scene
 			*/
@@ -205,9 +207,19 @@
 			    mat4.ortho(-1, 1, -1, 1 , -1, 1, pMatrix);
 			    
 			    //this example applies a rotation on the X and Y axes
-				mat4.identity(mvMatrix);
-			    mat4.rotate(mvMatrix, degToRad(rotY), [0, 1, 0]);
-			    mat4.rotate(mvMatrix, degToRad(rotX), [1, 0, 0]);
+				mat4.identity(rotMatrix);
+			    mat4.rotate(rotMatrix, degToRad(rotY), [0, 1, 0]);
+			    mat4.rotate(rotMatrix, degToRad(rotX), [1, 0, 0]);
+				
+				// We multiply rotMatrix (containing the rotation to apply) by mvMatrix,
+				// which contains the existing transformations to the sphere.
+				// We store the result in mvMatrix, so we will have a combination of every move
+				// applied to the sphere in it.
+				mat4.multiply(rotMatrix, mvMatrix, mvMatrix);
+				
+				// As the rotation has been applied and saved in mvMatrix, we have to reset rotY and rotX
+				rotY = 0;
+				rotX = 0;
 
 				//send the projection and model view matrices to the vertex shader
 			    glContext.uniformMatrix4fv(prg.pMatrixUniform, false, pMatrix);
