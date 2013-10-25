@@ -133,6 +133,7 @@
 			function initBuffers(){
 				indices = [];
 				vertices = [];
+				colors = [];
 				
 				var latitudeBands = sphereDivisions;
 			    var longitudeBands = sphereDivisions;
@@ -160,7 +161,7 @@
 			            vertices.push(radius * z);
 			            
 			            //color values depend on current latitude and longitude
-			            colors.push(longNumber/longitudeBands, latNumber/latitudeBands, 0.5, 1.0);
+			            colors.push(latNumber/longitudeBands, 0.0, 1.0 - latNumber/latitudeBands, 1.0);
 			        }
 			    }
 			
@@ -218,8 +219,7 @@
 				mat4.multiply(rotMatrix, mvMatrix, mvMatrix);
 				
 				// As the rotation has been applied and saved in mvMatrix, we have to reset rotY and rotX
-				rotY = 0;
-				rotX = 0;
+				rotY = rotX = 0;
 
 				//send the projection and model view matrices to the vertex shader
 			    glContext.uniformMatrix4fv(prg.pMatrixUniform, false, pMatrix);
