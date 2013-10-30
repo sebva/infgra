@@ -374,7 +374,7 @@
 		<script>displayTitle("Eg06-03-b : WebGL sphËre, approximation par surfaces de subdivision", 0,1,1,1);</script>
 		<p>	Utiliser les touches : '-' pour rÈduire la rÈsolution ; '+' pour l'augmenter ; 'a' et 'd' pour appliquer une rotation autour de l'axe Y ; 'w' et 's' pour une rotation autour de l'axe X.
 		</p>
-        <p> On ne peut pas augmenter la résolution de la sphère plus de 5 fois sans que celui-ci ait des problèmes d'affichage. Ceci est dû au fait que OpenGL ES ne peut pas gérer plus de 65536 vertex en mode GL_UNSIGNED_SHORT. Une solution en OpenGL classique serait de passer en mode GL_UNSIGNED_INT(pas disponible en OpenGL ES et donc WebGL)
+        <p> On ne peut pas augmenter la rÈsolution de la sphËre plus de 5 fois sans que celui-ci ait des problËmes d'affichage. Ceci est d˚ au fait que OpenGL ES ne peut pas gÈrer plus de 65536 vertex en mode GL_UNSIGNED_SHORT. Une solution en OpenGL classique serait de passer en mode GL_UNSIGNED_INT (pas disponible en OpenGL ES et donc WebGL). Une solution faisable en OpenGL ES est de passer les vertex par plusieurs tableaux distincts.
         </p>
 		<!-- WebGL canvas -->	
 		<canvas id="webgl-canvas" width="500" height="500">
