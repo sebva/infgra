@@ -1,0 +1,294 @@
+<!doctype html>
+
+<html>
+	<head>
+		<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+		<!-- Definition of style sheet format, especially for the WebGL canevas: -->
+		<link rel="stylesheet" href="css/stylesheet.css">
+
+		<!-- External JavaScript (JS) sources: -->
+		<script src="js/commonFunctions.js"></script>	<!-- Example external source -->
+		<script src='js/gl-matrix-min.js'></script>		<!-- Matrix Library -->
+		<script src='js/webglTools.js'></script>		<!-- Basic WebGL initialization tools -->
+
+		<script id="shader-vs" type="x-shader/x-vertex">
+		attribute vec3 aVertexPosition;
+		attribute vec3 aVertexNormal;
+		
+		uniform mat4 uMVMatrix; 
+		uniform mat4 uPMatrix; 
+		uniform mat4 uNMatrix; 
+		
+		uniform vec3 uLightPosition;
+		
+		varying vec3 vNormal;
+		varying vec3 vLightRay;
+		varying  vec3 vEyeVec;
+		
+		void main(void) {
+		
+			vec4 vertex = uMVMatrix * vec4(aVertexPosition, 1.0);
+		    vNormal = vec3(uNMatrix * vec4(aVertexNormal, 1.0));
+		    vec4 light = vec4(uLightPosition,1.0);
+		    vLightRay = vertex.xyz - light.xyz;
+		    vEyeVec = -vec3(vertex.xyz);
+			
+		    gl_Position = uPMatrix * vertex;
+		}
+		</script>
+		
+		<script id="shader-fs" type="x-shader/x-fragment">
+		#ifdef GL_ES
+		precision highp float;
+		#endif
+		
+		uniform float uShininess;       //shininess
+		uniform vec3 uLightAmbient;     //ambient color
+		uniform vec3 uMaterialDiffuse;      //diffuse color
+		uniform vec3 uMaterialSpecular;       //specular color
+		
+		varying vec3 vNormal;
+		varying vec3 vLightRay;
+		varying vec3 vEyeVec;
+		
+		void main(void)
+		{
+			vec3 L = normalize(vLightRay);
+			vec3 N = normalize(vNormal);
+			
+			float lambertTerm = dot(N,-L);
+			
+			vec3 finalColor = uLightAmbient;
+			
+			if(lambertTerm > 0.0)
+			{
+				finalColor += uMaterialDiffuse * lambertTerm;	
+				
+				vec3 E = normalize(vEyeVec);
+				vec3 R = reflect(L, N);
+				float specular = pow( max(dot(R, E), 0.0), uShininess);
+				finalColor += uMaterialSpecular * specular;
+			}
+			
+			gl_FragColor = vec4(finalColor, 1.0);
+		
+		}
+		</script>
+
+		<script>
+			var rotX = 0.0; //rotation on the X-axis (in degrees) 
+			var rotY = 0.0; //rotation on the Y-axis (in degrees) 
+			
+			// Buffers to send data to the graphics card (vertices, indices, color per vertex)
+			var vertexBuffer = null;
+			var indexBuffer = null;
+			var normalsBuffer = null;
+
+			var indices = []; //JavaScript array to store the indices of the polygon
+
+			
+			var mvMatrix = mat4.create(); // The Model-View matrix
+			var pMatrix = mat4.create(); // The projection matrix
+			var nMatrix = mat4.create(); // The normal matrix
+			
+			
+			window.onkeydown = checkKey;
+			
+			function checkKey(ev){
+				
+				switch(ev.keyCode){
+					case 189: // '-' key on mac keyboard
+					case 173: // '-' key (from keyboard)
+					case 109: // '-' key (from number pad)
+					default:
+					  //console.log(ev.keyCode); //--- DEBUG LINE ---
+					break;
+				}
+			}
+
+
+			//this function is called from initProgram() which is defined in webglTools.js, it is implemented here for clarity
+			function initShaderParameters(prg){
+				//The following lines get a reference to the uniforms and attributes defined in the shaders.
+				//This is a necessary step as the shaders are NOT written in JavaScript but in a 
+				//specialized language called GLSL.
+				
+				//--- Information for the Vertex Shader ---
+				// Attribute:
+				prg.vertexPositionAttribute = glContext.getAttribLocation(prg, "aVertexPosition");
+			    glContext.enableVertexAttribArray(prg.vertexPositionAttribute);
+			    
+			    prg.vertexNormalAttribute = glContext.getAttribLocation(prg, "aVertexNormal");
+			    glContext.enableVertexAttribArray(prg.vertexNormalAttribute);
+			    
+				// Uniform:
+			    prg.pMatrixUniform             = glContext.getUniformLocation(prg, 'uPMatrix');
+			    prg.mvMatrixUniform            = glContext.getUniformLocation(prg, 'uMVMatrix');
+			    prg.nMatrixUniform             = glContext.getUniformLocation(prg, 'uNMatrix');
+			    
+			    prg.lightPositionUniform       = glContext.getUniformLocation(prg, 'uLightPosition');
+			    
+				//--- Information for the Fragment Shader ---
+				prg.shininessUniform           = glContext.getUniformLocation(prg, 'uShininess');
+			    prg.lightAmbientUniform        = glContext.getUniformLocation(prg, 'uLightAmbient');
+			    prg.materialDiffuseUniform     = glContext.getUniformLocation(prg, 'uMaterialDiffuse');
+			    prg.materialSpecularUniform    = glContext.getUniformLocation(prg, 'uMaterialSpecular');
+			}
+			
+			
+
+			////////////////////////////////////////////////
+			////              Model Loader              ////
+			////////////////////////////////////////////////
+			
+			/**
+			* Creates an AJAX request to load a model asynchronously
+			*/
+			
+			function loadModel(filename){
+			    var request = new XMLHttpRequest();
+			    console.info('Requesting ' + filename);
+			    request.open("GET",filename);
+			    
+			    request.onreadystatechange = function() {
+			      if (request.readyState == 4) {
+			        if(request.status == 404) {
+			            console.info(filename + ' does not exist');
+			         }
+			        else {
+			            handleLoadedModel(filename,JSON.parse(request.responseText));
+
+			        }
+			      }
+			    }
+			    request.send();
+			}
+			
+			/**
+			* Creates the buffers that contain the geometry of the model
+			*/
+			function handleLoadedModel(filename,payload) {			    
+			    console.info(filename + ' has been retrieved from the server');
+
+				/*console.info("v: "+payload.vertices);
+				console.info("i: "+payload.indices);
+				console.info("c: "+payload.colors);*/
+				
+				indices = payload.indices;
+				//initializes buffers: sends data from the javascript arrays to the graphics card
+				vertexBuffer = getVertexBufferWithVertices(payload.vertices);					
+				normalsBuffer = getVertexBufferWithVertices(payload.normals);
+				indexBuffer = getIndexBufferWithIndices(payload.indices);
+				
+				 //init lights
+				initLights();
+			    //Starts rendering loop, calls drawScene
+				renderLoop();
+				
+			}
+			
+			//utility function to convert degrees to radians
+			function degToRad(degrees){
+				return( degrees * Math.PI / 180.0 );
+			}
+
+			//initializes light position and colors
+			function initLights(){
+			    glContext.uniform3f(prg.lightPositionUniform, 1, 1, 1);
+			    glContext.uniform3f(prg.lightAmbientUniform,0.1,0.1,0.1);
+				glContext.uniform3f(prg.materialSpecularUniform, 0.5,0.5,0.5);	
+				glContext.uniform3f(prg.materialDiffuseUniform, 0.8,0.3,0.3);
+			    glContext.uniform1f(prg.shininessUniform, 24.0);
+			}
+			
+			/*
+			* Draws the scene
+			*/
+			function drawScene(){
+				//light grey background
+				glContext.clearColor(0.9, 0.9, 1.0, 1.0); // #EEEEFF
+				
+				//activate z-buffer
+				glContext.enable(glContext.DEPTH_TEST);
+				
+				//resets color and depth buffer before drawing
+				glContext.clear(glContext.COLOR_BUFFER_BIT | glContext.DEPTH_BUFFER_BIT);
+				
+				//defines viewport dimensions based on the webgl canvas size
+				glContext.viewport(0, 0, c_width, c_height);
+									    
+			    mat4.perspective(60, c_width / c_height, 1.0, 100.0, pMatrix);
+
+
+				//model view matrix:
+				mat4.identity(mvMatrix);				
+				//sets the camera to a reasonable distance to view the part (far compared to the square: the teapot is relatively big)
+			    var distance = -35;
+				mat4.translate(mvMatrix, [0.0, 0, distance]); 
+			    //this example applies a rotation on the X and Y axes
+			    mat4.rotate(mvMatrix, degToRad(rotX), [1, 0, 0]);
+			    mat4.rotate(mvMatrix, degToRad(rotY), [0, 1, 0]);
+			  
+				rotX += 0.05;
+				rotY += 1.0;
+
+				//send the projection and model view matrices to the vertex shader
+			    glContext.uniformMatrix4fv(prg.pMatrixUniform, false, pMatrix);
+			    glContext.uniformMatrix4fv(prg.mvMatrixUniform, false, mvMatrix);	
+
+				//calculate and send the normal matrix for shading calculation			    	
+			    mat4.set(mvMatrix, nMatrix);
+			    mat4.inverse(nMatrix);
+			    mat4.transpose(nMatrix);
+			    
+			    glContext.uniformMatrix4fv(prg.nMatrixUniform, false, nMatrix);	
+
+				//1. Sending vertices(1.1), normals(1.2), and indices(1.3) to the Vertex Shader;
+				//   then ask Vertex Shader to draw triangles between vertices(1.4)
+				//1.1 Send the array of VERTEX specifying that they are each composed of 3 parameters 
+				glContext.bindBuffer(glContext.ARRAY_BUFFER, vertexBuffer);
+				glContext.vertexAttribPointer(prg.vertexPositionAttribute, 3, glContext.FLOAT, false, 0, 0);
+
+				//1.2 Send the array of Vertex Normals for shading calculation
+				glContext.bindBuffer(glContext.ARRAY_BUFFER, normalsBuffer);
+				glContext.vertexAttribPointer(prg.vertexNormalAttribute, 3, glContext.FLOAT, false, 0, 0);
+
+				//1.3 Send the array of INDEX (1 param. for each => no need of 'vertexAttribPointer')
+				glContext.bindBuffer(glContext.ELEMENT_ARRAY_BUFFER, indexBuffer);
+								
+				//1.4 Draw as triangles
+				glContext.drawElements(glContext.TRIANGLES, indices.length, glContext.UNSIGNED_SHORT,0);			
+			}
+			
+			/*******************************************************************************
+				Starting point!! 
+				Initializes webgl, shaders, buffers and starts rendering loop
+			********************************************************************************/
+			function initWebGL(){
+				glContext = getGLContext('webgl-canvas');
+				//Initializes the program (shaders).
+				initProgram();
+				//Loads a model from file and initializes the buffers that we are going to use to draw polygons 
+				//(vertex buffer, color and index buffer)
+				loadModel("models/teapot.json");
+				
+			}
+		</script>
+
+	</head>
+
+	<!-- HTML body -->
+	<body onload="initWebGL()">
+		<script>displayTitle("Eg06-04-a : Visualisation d'un model en format JSON (Phong shading)", 0,1,1,1);</script>
+		<p>	
+		</p>
+		<!-- WebGL canvas -->	
+		<canvas id="webgl-canvas" width="500" height="500">
+			HTML5 is not supported
+		</canvas>
+	</body>
+
+
+
+
+</html>
