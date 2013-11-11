@@ -84,8 +84,12 @@
 			var vertexBuffer = null;
 			var indexBuffer = null;
 			var normalsBuffer = null;
+			
+			var myNormalsBuffer = null;
 
 			var indices = []; //JavaScript array to store the indices of the polygon
+			
+			var normals = [];
 			
 			var mvMatrix = mat4.create(); // The Model-View matrix
 			var pMatrix  = mat4.create(); // The projection matrix
@@ -186,10 +190,30 @@
 				console.log("vertices: "+payload.vertices.length);
 				console.log("normals: "+payload.normals.length);
 				console.log("indices: "+indices.length);
+				
+				var j = 0;
+				
+				for (var i = 0; i < payload.vertices.length * 2; i += 6) {
+					// le point de départ
+					normals[i] = payload.vertices[j];
+					normals[i + 1] = payload.vertices[j + 1];
+					normals[i + 2] = payload.vertices[j + 2];
+					// le point d'arrivée
+					normals[i + 3] = payload.normals[j];
+					normals[i + 4] = payload.normals[j + 1];
+					normals[i + 5] = payload.normals[j + 2];
+					
+					j += 3;
+				}
+				
+				console.log("normals: " + normals.length);
+				
 				//initializes buffers: sends data from the javascript arrays to the graphics card
 				vertexBuffer = getVertexBufferWithVertices(payload.vertices);					
 				normalsBuffer = getVertexBufferWithVertices(payload.normals);
 				indexBuffer = getIndexBufferWithIndices(payload.indices);
+				
+				myNormalsBuffer = getVertexBufferWithVertices(normals);
 				
 				// Init lights
 				initLights();
@@ -268,7 +292,11 @@
 								
 				//1.4 Draw as triangles
 				glContext.drawElements(glContext.TRIANGLES, indices.length, glContext.UNSIGNED_SHORT,0);
-			
+				
+				// test avec drawArrays
+				glContext.bindBuffer(glContext.ARRAY_BUFFER, myNormalsBuffer);
+				glContext.vertexAttribPointer(prg.vertexPositionAttribute, 3, glContext.FLOAT, false, 0, 0);
+				glContext.drawArrays(glContext.LINES, 0, normals.length / 6);
 			}
 			
 			/*******************************************************************************
