@@ -348,45 +348,47 @@
 
 	<!-- HTML body -->
 	<body onload="initWebGL()">
-		<script>displayTitle("Eg06-04-b : Visualisation d'un model en format JSON (Phong shading)", 0,1,1,1);</script>
-		<p>	
+		<script>displayTitle("Eg06-04-01 : Visualisation d'un mod&egrave;le en format JSON et de ses normales (Phong shading)", 0,1,1,1);</script>
+		<p>
+		Cliquez sur le bouton gauche de la souris pour voir les normales aux sommets des triangles (en bleu).<br />
+		Cliquez sur le bouton droit de la souris pour voir les normales aux barycentres des triangles (en rouge).
 		</p>
+		<p>Les touches WASD permettent de changer l'angle de vue</p>
 		<!-- WebGL canvas -->	
 		<canvas id="webgl-canvas" width="500" height="500">
 			HTML5 is not supported
 		</canvas>
+		<script type="text/javascript">
+			// Don't display the context menu.
+			document.getElementById("webgl-canvas").addEventListener("contextmenu",
+			function(event) {
+				event.preventDefault();
+				return false;
+			}, false);
+
+			document.getElementById("webgl-canvas").addEventListener("mousedown",
+			function(event) {
+				switch (event.which) {
+					case 1: // left click
+						blue = true;
+						break;
+					case 3: // rigth click
+						blue = true;
+						break;
+				}
+			}, false);
+	
+			document.getElementById("webgl-canvas").addEventListener("mouseup",
+			function(event) {
+				switch (event.which) {
+					case 1: // left click
+						blue = false;
+						break;
+					case 3: // right click
+						blue = false;
+						break;
+				}
+			}, false);
+		</script>
 	</body>
 </html>
-
-<script type="text/javascript">
-	// Don't display the context menu.
-	document.getElementById("webgl-canvas").addEventListener("contextmenu",
-	function(event) {
-		event.preventDefault();
-		return false;
-	}, false);
-
-	document.getElementById("webgl-canvas").addEventListener("mousedown",
-	function(event) {
-		switch (event.which) {
-			case 1: // left click
-				blue = true;
-				break;
-			case 3: // rigth click
-				blue = true;
-				break;
-		}
-	}, false);
-	
-	document.getElementById("webgl-canvas").addEventListener("mouseup",
-	function(event) {
-		switch (event.which) {
-			case 1: // left click
-				blue = false;
-				break;
-			case 3: // right click
-				blue = false;
-				break;
-		}
-	}, false);
-</script>

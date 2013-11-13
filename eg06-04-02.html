@@ -114,7 +114,7 @@
 			var rotY = 0; //rotation on the Y-axis (in degrees) 
 			var rotX = 0; //rotation on the X-axis (in degrees) 
 			
-			var phongGouraud = 1;
+			var phongGouraud = 1; // 0 = ambient; 1 = Phong; 2 = Gouraud
 			
 			// Buffers to send data to the graphics card (vertices, indices, color per vertex)
 			var vertexBuffer = null;
@@ -341,10 +341,11 @@
 
 	<!-- HTML body -->
 	<body onload="initWebGL()">
-		<script>displayTitle("Eg06-04-b : Visualisation d'un model en format JSON (Phong shading ou Gouraud shading)", 0,1,1,1);</script>
+		<script>displayTitle("Eg06-04-02 : Visualisation d'un mod&egrave;le en format JSON (Phong shading ou Gouraud shading)", 0,1,1,1);</script>
 		<p>
 		Appuyez sur la touche <strong>P</strong> pour commuter l'illumination de Phong ou sur <strong>G</strong> pour commuter l'illumination de Gouraud.
 		</p>
+		<p>Les touches WASD permettent de changer l'angle de vue</p>
 		<!-- WebGL canvas -->	
 		<canvas id="webgl-canvas" width="500" height="500">
 			HTML5 is not supported
