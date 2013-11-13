@@ -154,6 +154,14 @@
 					  console.log(ev.keyCode); //--- DEBUG LINE ---
 					break;
 				}
+				var effet;
+				if(phongGouraud == 1)
+					effet = 'Phong';
+				else if(phongGouraud == 2)
+					effet = 'Gouraud';
+				else
+					effet = 'Ambient';
+				document.getElementById('effect').innerHTML = effet;
 			}
 
 
@@ -346,6 +354,9 @@
 		Appuyez sur la touche <strong>P</strong> pour commuter l'illumination de Phong ou sur <strong>G</strong> pour commuter l'illumination de Gouraud.
 		</p>
 		<p>Les touches WASD permettent de changer l'angle de vue</p>
+		<ul>
+			<li>Effet : <span id="effect">Phong</span></li>
+		</ul>
 		<!-- WebGL canvas -->	
 		<canvas id="webgl-canvas" width="500" height="500">
 			HTML5 is not supported

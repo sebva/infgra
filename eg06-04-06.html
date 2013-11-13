@@ -19,11 +19,18 @@
 		uniform mat4 uPMatrix;
 		uniform mat4 uNMatrix;
 
+		uniform float uShininess;			// shininess
+		uniform vec3 uLightAmbient;			// ambient color
+		uniform vec3 uMaterialDiffuse;		// diffuse color
+		uniform vec3 uMaterialSpecular;		// specular color
+		uniform int uPhongGouraud;			// 0 = ambiant, 1 = Phong, 2 = Gouraud
+
 		uniform vec3 uLightPosition;
 
 		varying vec3 vNormal;
 		varying vec3 vLightRay;
 		varying vec3 vEyeVec;
+		varying vec3 vColor;
 
 		void main(void) {
 
@@ -33,6 +40,24 @@
 		 	vec4 light = vec4(uLightPosition,1.0);
 			vLightRay = vertex.xyz - light.xyz;
 			vEyeVec = -vec3(vertex.xyz);
+
+
+		 	if(uPhongGouraud == 2) // Gouraud
+		 	{
+				float fAngle;
+
+				vec3 normal = normalize(vNormal);
+
+				vec3 L = normalize(vLightRay);
+				vec3 N = normalize(vNormal);
+				vec3 E = normalize(vEyeVec);
+				vec3 R = reflect(L, N);
+				float specular = pow( max(dot(R, E), 0.0), uShininess);
+
+				fAngle = max(0.0, dot(normal, R));
+
+				vColor = uLightAmbient + uMaterialDiffuse * fAngle + uMaterialSpecular * specular;
+		 	}
 
 		    gl_Position = uPMatrix * vertex;
 		}
@@ -47,10 +72,12 @@
 		uniform vec3 uLightAmbient;			// ambient color
 		uniform vec3 uMaterialDiffuse;		// diffuse color
 		uniform vec3 uMaterialSpecular;		// specular color
+		uniform int uPhongGouraud;			// 0 = ambiant, 1 = Phong, 2 = Gouraud
 
 		varying vec3 vNormal;
 		varying vec3 vLightRay;
 		varying vec3 vEyeVec;
+		varying vec3 vColor;
 
 		void main(void)
 		{
@@ -61,14 +88,21 @@
 
 			vec3 finalColor = uLightAmbient;
 
-			if(lambertTerm > 0.0)
+			if(uPhongGouraud == 1) // Phong
 			{
-				finalColor += uMaterialDiffuse * lambertTerm;
+				if(lambertTerm > 0.0)
+				{
+					finalColor += uMaterialDiffuse * lambertTerm;
 
-				vec3 E = normalize(vEyeVec);
-				vec3 R = reflect(L, N);
-				float specular = pow( max(dot(R, E), 0.0), uShininess);
-				finalColor += uMaterialSpecular * specular;
+					vec3 E = normalize(vEyeVec);
+					vec3 R = reflect(L, N);
+					float specular = pow( max(dot(R, E), 0.0), uShininess);
+					finalColor += uMaterialSpecular * specular;
+				}
+			}
+			else if(uPhongGouraud == 2) // Gouraud
+			{
+				finalColor = vColor;
 			}
 
 			gl_FragColor = vec4(finalColor, 1.0);
@@ -81,6 +115,7 @@
 			var rotX = 0; //rotation on the X-axis (in degrees)
 			
 			var subdivisions = 0; // How many times should we subdivise
+			var phongGouraud = 1;
 
 			// Buffers to send data to the graphics card (vertices, indices, color per vertex)
 			var vertexBuffer = null;
@@ -113,6 +148,12 @@
 					case 83: // 's'
 						rotX += delta;
 						break;
+					case 80: // 'p'
+						phongGouraud = (phongGouraud == 1) ? 0 : 1;
+						break;
+					case 71: // 'g'
+						phongGouraud = (phongGouraud == 2) ? 0 : 2;
+						break;
 					case 107:
 					case 49: // '+'
 						subdivisions += 1;
@@ -130,6 +171,14 @@
 					  console.log(ev.keyCode); //--- DEBUG LINE ---
 					break;
 				}
+				var effet;
+				if(phongGouraud == 1)
+					effet = 'Phong';
+				else if(phongGouraud == 2)
+					effet = 'Gouraud';
+				else
+					effet = 'Ambient';
+				document.getElementById('effect').innerHTML = effet;
 			}
 
 
@@ -159,6 +208,7 @@
 			    prg.lightAmbientUniform        = glContext.getUniformLocation(prg, 'uLightAmbient');
 			    prg.materialDiffuseUniform     = glContext.getUniformLocation(prg, 'uMaterialDiffuse');
 			    prg.materialSpecularUniform    = glContext.getUniformLocation(prg, 'uMaterialSpecular');
+			    prg.phongGouraudUniform		   = glContext.getUniformLocation(prg, 'uPhongGouraud');
 			}
 
 
@@ -363,7 +413,7 @@
 				mat4.identity(mvMatrix);
 
 				// For teapot
-				/*
+				//*
 				var distance = -35;
 				mat4.translate(mvMatrix, [0.0, 0, distance]);
 				//*/
@@ -388,6 +438,8 @@
 			    mat4.transpose(nMatrix);
 
 			    glContext.uniformMatrix4fv(prg.nMatrixUniform, false, nMatrix);
+
+  				glContext.uniform1i(prg.phongGouraudUniform , phongGouraud);
 
 				for(var i = 0; i < indicesLength.length; i++)
 				{
@@ -422,14 +474,19 @@
 				//(vertex buffer, color and index buffer)
 				loadModel(path);
 			}
-			var path = "models/bunny.json";
+			var path = "models/teapot.json";
 		</script>
 
 	</head>
 
 	<!-- HTML body -->
 	<body onload="initWebGL()">
-		<script>displayTitle("Eg06-04-03 : Subdivision des triangles d'un mod&egrave;le en format JSON (Phong shading)", 0,1,1,1);</script>
+		<script>displayTitle("Eg06-04-06 : Subdivision des triangles d'un mod&egrave;le en format JSON (Phong shading ou Gouraud shading)", 0,1,1,1);</script>
+		<p>
+		Appuyez sur la touche <strong>P</strong> pour commuter l'illumination de Phong ou sur <strong>G</strong> pour commuter l'illumination de Gouraud.<br />
+		En s&eacutelectionnant l'illumination de Phong, on ne remarque aucune diff&eacuterence en subdivisant, car l'effet est appliqu&eacute dans le Fragment Shader.<br />
+		En s&eacutelectionnant l'illumination de Gouraud, plus il y a de subdivisions, plus l'effet est pr&eacutecis, car il est appliqu&eacute pour chaque vertex dans le Vertex Shader.
+		</p>
 		<p>
 		Appuyez sur la touche <strong>+</strong> pour augmenter ou sur <strong>-</strong> pour r&eacute;duire le nombre de subdivisions
 		</p>
@@ -438,6 +495,7 @@
 			<li>Niveau de subdivision : <span id="nbSubdivisions"></span></li>
 			<li>Nombre de vertex : <span id="nbVertices"></span></li>
 			<li>Nombre d'indices : <span id="nbIndices"></span></li>
+			<li>Effet : <span id="effect">Phong</span></li>
 		</ul>
 		<!-- WebGL canvas -->
 		<canvas id="webgl-canvas" width="500" height="500">
