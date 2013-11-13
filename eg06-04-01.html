@@ -48,6 +48,8 @@
 		uniform vec3 uMaterialDiffuse;		// diffuse color
 		uniform vec3 uMaterialSpecular;		// specular color
 		
+		uniform vec3 uRedBlue;
+		
 		varying vec3 vNormal;
 		varying vec3 vLightRay;
 		varying vec3 vEyeVec;
@@ -56,22 +58,30 @@
 		{
 			vec3 L = normalize(vLightRay);
 			vec3 N = normalize(vNormal);	
-			
+				
 			float lambertTerm = dot(N,-L);
-			
+				
 			vec3 finalColor = uLightAmbient;
-			
+				
 			if(lambertTerm > 0.0)
 			{
 				finalColor += uMaterialDiffuse * lambertTerm;	
-				
+					
 				vec3 E = normalize(vEyeVec);
 				vec3 R = reflect(L, N);
 				float specular = pow( max(dot(R, E), 0.0), uShininess);
 				finalColor += uMaterialSpecular * specular;
 			}
 			
-			gl_FragColor = vec4(finalColor, 1.0);
+			if (uRedBlue.r == 0.0 && uRedBlue.g == 0.0 && uRedBlue.b == 0.0) {
+				gl_FragColor = vec4(finalColor, 1.0);
+			}
+			if (uRedBlue.r == 0.0 && uRedBlue.g == 0.0 && uRedBlue.b == 1.0) {
+				gl_FragColor = vec4(uRedBlue, 1.0);
+			}
+			if (uRedBlue.r == 1.0 && uRedBlue.g == 0.0 && uRedBlue.b == 0.0) {
+				gl_FragColor = vec4(uRedBlue, 1.0);
+			}
 		}
 		</script>
 
@@ -89,6 +99,8 @@
 			var normals = [];
 			var normalsTab = [];
 			var normalsTabBuffer = [];
+			
+			var blue = false;
 
 			var indices = []; //JavaScript array to store the indices of the polygon
 			
@@ -119,7 +131,6 @@
 				}
 			}
 
-
 			//this function is called from initProgram() which is defined in webglTools.js, it is implemented here for clarity
 			function initShaderParameters(prg){
 				//The following lines get a reference to the uniforms and attributes defined in the shaders.
@@ -146,6 +157,7 @@
 			    prg.lightAmbientUniform        = glContext.getUniformLocation(prg, 'uLightAmbient');
 			    prg.materialDiffuseUniform     = glContext.getUniformLocation(prg, 'uMaterialDiffuse');
 			    prg.materialSpecularUniform    = glContext.getUniformLocation(prg, 'uMaterialSpecular');
+				prg.redBlue                    = glContext.getUniformLocation(prg, 'uRedBlue');
 			}
 			
 			
@@ -206,7 +218,6 @@
 					counter += 3;
 				}
 				
-				// 268164 / 6 = 44694
 				var DIV = 6;
 				goodSize = normals.length / DIV;
 				counter = 0;
@@ -301,15 +312,20 @@
 
 				//1.3 Send the array of INDEX (1 param. for each => no need of 'vertexAttribPointer')
 				glContext.bindBuffer(glContext.ELEMENT_ARRAY_BUFFER, indexBuffer);
-								
+				
+				glContext.uniform3f(prg.redBlue, 0.0, 0.0, 0.0);
+				
 				//1.4 Draw as triangles
 				glContext.drawElements(glContext.TRIANGLES, indices.length, glContext.UNSIGNED_SHORT,0);
 				
+				if (blue) {
+					glContext.uniform3f(prg.redBlue, 0.0, 0.0, 1.0);
 				
-				for (var i = 0; i < normalsTabBuffer.length; i++) {
-					glContext.bindBuffer(glContext.ARRAY_BUFFER, normalsTabBuffer[i]);
-					glContext.vertexAttribPointer(prg.vertexPositionAttribute, 3, glContext.FLOAT, false, 0, 0);
-					glContext.drawArrays(glContext.LINES, 0, goodSize / 3);
+					for (var i = 0; i < normalsTabBuffer.length; i++) {
+						glContext.bindBuffer(glContext.ARRAY_BUFFER, normalsTabBuffer[i]);
+						glContext.vertexAttribPointer(prg.vertexPositionAttribute, 3, glContext.FLOAT, false, 0, 0);
+						glContext.drawArrays(glContext.LINES, 0, goodSize / 3);
+					}
 				}
 			}
 			
@@ -340,8 +356,37 @@
 			HTML5 is not supported
 		</canvas>
 	</body>
-
-
-
-
 </html>
+
+<script type="text/javascript">
+	// Don't display the context menu.
+	document.getElementById("webgl-canvas").addEventListener("contextmenu",
+	function(event) {
+		event.preventDefault();
+		return false;
+	}, false);
+
+	document.getElementById("webgl-canvas").addEventListener("mousedown",
+	function(event) {
+		switch (event.which) {
+			case 1: // left click
+				blue = true;
+				break;
+			case 3: // rigth click
+				blue = true;
+				break;
+		}
+	}, false);
+	
+	document.getElementById("webgl-canvas").addEventListener("mouseup",
+	function(event) {
+		switch (event.which) {
+			case 1: // left click
+				blue = false;
+				break;
+			case 3: // right click
+				blue = false;
+				break;
+		}
+	}, false);
+</script>
