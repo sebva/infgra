@@ -125,6 +125,7 @@
 			var indices = []; //JavaScript array to store the indices of the polygon
 			var vertices = [];
 			var normals = [];
+			var indicesLength = [];
 
 			var mvMatrix = mat4.create(); // The Model-View matrix
 			var pMatrix  = mat4.create(); // The projection matrix
@@ -163,7 +164,8 @@
 						subdivisions -= 1;
 						if(subdivisions < 0)
 							subdivisions = 0;
-						loadModel(path);
+						else
+							loadModel(path);
 						break;
 					default:
 					  console.log(ev.keyCode); //--- DEBUG LINE ---
@@ -235,10 +237,6 @@
 			*/
 			function handleLoadedModel(filename,payload) {
 				console.info(filename + ' has been retrieved from the server');
-				
-				/*	console.info("v: "+payload.vertices);
-					console.info("i: "+payload.indices);
-					console.info("c: "+payload.colors); */
 
 				indices = payload.indices;
 				vertices = payload.vertices;
@@ -246,26 +244,36 @@
 				
 				for(var subd = 0; subd < subdivisions; subd++)
 				{
+					// We copy the old values and reset the global arrays
 					var oldIndices = indices;
 					indices = [];
-					
-					var lastIndex = vertices.length / 3;
+					var oldVertices = vertices;
+					vertices = [];
+					var oldNormals = normals;
+					normals = [];
 
+					// For each triangle
 					for(var i = 0; i < oldIndices.length; i += 3)
 					{
 						var i1 = oldIndices[i] * 3;
 						var i2 = oldIndices[i+1] * 3;
 						var i3 = oldIndices[i+2] * 3;
 					
-						var v1 = vertices.slice(i1, i1+3);
-						var v2 = vertices.slice(i2, i2+3);
-						var v3 = vertices.slice(i3, i3+3);
+						var v1 = oldVertices.slice(i1, i1+3);
+						var v2 = oldVertices.slice(i2, i2+3);
+						var v3 = oldVertices.slice(i3, i3+3);
 					
-						var n1 = normals.slice(i1, i1+3);
-						var n2 = normals.slice(i2, i2+3);
-						var n3 = normals.slice(i3, i3+3);
-
+						var n1 = oldNormals.slice(i1, i1+3);
+						var n2 = oldNormals.slice(i2, i2+3);
+						var n3 = oldNormals.slice(i3, i3+3);
+						
+						var initIndex = vertices.length /3;
+						
 						vertices.push(
+							v1[0], v1[1], v1[2],
+							v2[0], v2[1], v2[2],
+							v3[0], v3[1], v3[2],
+							
 							(v1[0] + v2[0]) / 2.0,
 							(v1[1] + v2[1]) / 2.0,
 							(v1[2] + v2[2]) / 2.0,
@@ -280,6 +288,10 @@
 						);
 
 						normals.push(
+							n1[0], n1[1], n1[2],
+							n2[0], n2[1], n2[2],
+							n3[0], n3[1], n3[2],
+							
 							(n1[0] + n2[0]) / 2.0,
 							(n1[1] + n2[1]) / 2.0,
 							(n1[2] + n2[2]) / 2.0,
@@ -294,33 +306,63 @@
 						);
 
 						indices.push(
-							lastIndex + i,
-							lastIndex + i + 1,
-							lastIndex + i + 2,
+							initIndex + 3,
+							initIndex + 4,
+							initIndex + 5,
 					
-							oldIndices[i],
-							lastIndex + i,
-							lastIndex + i + 2,
+							initIndex,
+							initIndex + 3,
+							initIndex + 5,
 						
-							oldIndices[i+1],
-							lastIndex + i,
-							lastIndex + i + 1,
+							initIndex + 1,
+							initIndex + 3,
+							initIndex + 4,
 						
-							oldIndices[i+2],
-							lastIndex + i + 1,
-							lastIndex + i + 2
+							initIndex + 2,
+							initIndex + 4,
+							initIndex + 5
 						);
 					}
 				}
-
+				
+				// The buffers are now arrays
+				vertexBuffer = [];
+				indexBuffer = [];
+				normalsBuffer = [];
+				indicesLength = [];
+				
+				if(subdivisions > 0)
+				{
+					var indStart = 0, vertStart = 0, trianglesAtATime = 10000, i = 0;
+					while(indStart < indices.length && vertStart < vertices.length)
+					{
+						var ind = indices.slice(indStart, indStart + trianglesAtATime * 12).map(function(index) { return index - i*trianglesAtATime*6; });
+						indicesLength[i] = ind.length;
+						indexBuffer[i] = getIndexBufferWithIndices(ind);
+						vertexBuffer[i] = getVertexBufferWithVertices(vertices.slice(vertStart, vertStart + trianglesAtATime * 18));
+						normalsBuffer[i] = getVertexBufferWithVertices(normals.slice(vertStart, vertStart + trianglesAtATime * 18));
+					
+						indStart += 12 * trianglesAtATime;
+						vertStart += 18 * trianglesAtATime;
+						i++;
+					}
+				}
+				/* Special treatment when the original model is loaded because it's not always
+				sorted the same way as when we subdivise it ourselves. */
+				else
+				{
+					indicesLength[0] = indices.length;
+					vertexBuffer[0] = getVertexBufferWithVertices(vertices);					
+					normalsBuffer[0] = getVertexBufferWithVertices(normals);
+					indexBuffer[0] = getIndexBufferWithIndices(indices);
+				}
+				
 				console.log("vertices: "+ vertices.length);
 				console.log("normals: "+ normals.length);
 				console.log("indices: "+ indices.length);
-
-				//initializes buffers: sends data from the javascript arrays to the graphics card
-				vertexBuffer = getVertexBufferWithVertices(vertices);
-				normalsBuffer = getVertexBufferWithVertices(normals);
-				indexBuffer = getIndexBufferWithIndices(indices);
+				document.getElementById("nbVertices").innerHTML = vertices.length;
+				document.getElementById("nbIndices").innerHTML = indices.length;
+				document.getElementById("nbSubdivisions").innerHTML = subdivisions;
 
 				// Init lights
 				initLights();
@@ -369,7 +411,6 @@
 				//*/
 
 				//Positions de object in the center of the scene
-
 			    var tx = 0;
 			    var ty = -0.4;
 				var tz = -1.3;
@@ -392,22 +433,25 @@
 
   				glContext.uniform1i(prg.phongGouraudUniform , phongGouraud);
 
-				//1. Sending vertices(1.1), normals(1.2), and indices(1.3) to the Vertex Shader;
-				//   then ask Vertex Shader to draw triangles between vertices(1.4)
-				//1.1 Send the array of VERTEX specifying that they are each composed of 3 parameters
-				glContext.bindBuffer(glContext.ARRAY_BUFFER, vertexBuffer);
-				glContext.vertexAttribPointer(prg.vertexPositionAttribute, 3, glContext.FLOAT, false, 0, 0);
+				for(var i = 0; i < indicesLength.length; i++)
+				{
+					//1. Sending vertices(1.1), normals(1.2), and indices(1.3) to the Vertex Shader;
+					//   then ask Vertex Shader to draw triangles between vertices(1.4)
+					//1.1 Send the array of VERTEX specifying that they are each composed of 3 parameters
+					glContext.bindBuffer(glContext.ARRAY_BUFFER, vertexBuffer[i]);
+					glContext.vertexAttribPointer(prg.vertexPositionAttribute, 3, glContext.FLOAT, false, 0, 0);
 
-				//1.2 Send the array of Vertex Normals for shading calculation
-				glContext.bindBuffer(glContext.ARRAY_BUFFER, normalsBuffer);
-				glContext.vertexAttribPointer(prg.vertexNormalAttribute, 3, glContext.FLOAT, false, 0, 0);
+					//1.2 Send the array of Vertex Normals for shading calculation
+					glContext.bindBuffer(glContext.ARRAY_BUFFER, normalsBuffer[i]);
+					glContext.vertexAttribPointer(prg.vertexNormalAttribute, 3, glContext.FLOAT, false, 0, 0);
 
-				//1.3 Send the array of INDEX (1 param. for each => no need of 'vertexAttribPointer')
-				glContext.bindBuffer(glContext.ELEMENT_ARRAY_BUFFER, indexBuffer);
+					//1.3 Send the array of INDEX (1 param. for each => no need of 'vertexAttribPointer')
+					glContext.bindBuffer(glContext.ELEMENT_ARRAY_BUFFER, indexBuffer[i]);
 
-				//1.4 Draw as triangles
-				glContext.drawElements(glContext.TRIANGLES, indices.length, glContext.UNSIGNED_SHORT,0);
-
+					//1.4 Draw as triangles
+					glContext.drawElements(glContext.TRIANGLES, indicesLength[i], glContext.UNSIGNED_SHORT,0);
+				
+				}
 			}
 
 			/*******************************************************************************
@@ -429,10 +473,19 @@
 
 	<!-- HTML body -->
 	<body onload="initWebGL()">
-		<script>displayTitle("Eg06-04-b : Visualisation d'un model en format JSON (Phong shading ou Gouraud shading)", 0,1,1,1);</script>
+		<script>displayTitle("Eg06-04-03 : Subdivision des triangles d'un mod&egrave;le en format JSON (Phong shading ou Gouraud shading)", 0,1,1,1);</script>
 		<p>
 		Appuyez sur la touche <strong>P</strong> pour commuter l'illumination de Phong ou sur <strong>G</strong> pour commuter l'illumination de Gouraud.
 		</p>
+		<p>
+		Appuyez sur la touche <strong>+</strong> pour augmenter ou sur <strong>-</strong> pour r&eacute;duire le nombre de subdivisions
+		</p>
+		<p>Les touches WASD permettent de changer l'angle de vue</p>
+		<ul>
+			<li>Niveau de subdivision : <span id="nbSubdivisions"></span></li>
+			<li>Nombre de vertex : <span id="nbVertices"></span></li>
+			<li>Nombre d'indices : <span id="nbIndices"></span></li>
+		</ul>
 		<!-- WebGL canvas -->
 		<canvas id="webgl-canvas" width="500" height="500">
 			HTML5 is not supported
