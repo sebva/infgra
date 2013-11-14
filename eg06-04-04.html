@@ -1,0 +1,487 @@
+<!doctype html>
+
+<html>
+	<head>
+		<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+		<!-- Definition of style sheet format, especially for the WebGL canevas: -->
+		<link rel="stylesheet" href="css/stylesheet.css">
+
+		<!-- External JavaScript (JS) sources: -->
+		<script src="js/commonFunctions.js"></script>	<!-- Example external source -->
+		<script src='js/gl-matrix-min.js'></script>		<!-- Matrix Library -->
+		<script src='js/webglTools.js'></script>		<!-- Basic WebGL initialization tools -->
+
+		<script id="shader-vs" type="x-shader/x-vertex">
+		attribute vec3 aVertexPosition;
+		attribute vec3 aVertexNormal;
+
+		uniform mat4 uMVMatrix;
+		uniform mat4 uPMatrix;
+		uniform mat4 uNMatrix;
+
+		uniform vec3 uLightPosition;
+
+		varying vec3 vNormal;
+		varying vec3 vLightRay;
+		varying vec3 vEyeVec;
+
+		void main(void) {
+
+			vec4 vertex = uMVMatrix * vec4(aVertexPosition, 1.0);
+		    vNormal = vec3(uNMatrix * vec4(aVertexNormal, 1.0));
+
+		 	vec4 light = vec4(uLightPosition,1.0);
+			vLightRay = vertex.xyz - light.xyz;
+			vEyeVec = -vec3(vertex.xyz);
+
+		    gl_Position = uPMatrix * vertex;
+		}
+		</script>
+
+		<script id="shader-fs" type="x-shader/x-fragment">
+		#ifdef GL_ES
+		precision highp float;
+		#endif
+
+		uniform float uShininess;			// shininess
+		uniform vec3 uLightAmbient;			// ambient color
+		uniform vec3 uMaterialDiffuse;		// diffuse color
+		uniform vec3 uMaterialSpecular;		// specular color
+
+		varying vec3 vNormal;
+		varying vec3 vLightRay;
+		varying vec3 vEyeVec;
+
+		void main(void)
+		{
+			vec3 L = normalize(vLightRay);
+			vec3 N = normalize(vNormal);
+
+			float lambertTerm = dot(N,-L);
+
+			vec3 finalColor = uLightAmbient;
+
+			if(lambertTerm > 0.0)
+			{
+				finalColor += uMaterialDiffuse * lambertTerm;
+
+				vec3 E = normalize(vEyeVec);
+				vec3 R = reflect(L, N);
+				float specular = pow( max(dot(R, E), 0.0), uShininess);
+				finalColor += uMaterialSpecular * specular;
+			}
+
+			gl_FragColor = vec4(finalColor, 1.0);
+		}
+		</script>
+
+		<script>
+
+			var rotY = 0; //rotation on the Y-axis (in degrees)
+			var rotX = 0; //rotation on the X-axis (in degrees)
+			
+			var subdivisions = 0; // How many times should we subdivise
+
+			// Buffers to send data to the graphics card (vertices, indices, color per vertex)
+			var vertexBuffer = null;
+			var indexBuffer = null;
+			var normalsBuffer = null;
+
+			var indices = []; //JavaScript array to store the indices of the polygon
+			var vertices = [];
+			var normals = [];
+			var indicesLength = [];
+
+			var mvMatrix = mat4.create(); // The Model-View matrix
+			var pMatrix  = mat4.create(); // The projection matrix
+			var nMatrix  = mat4.create(); // The normal matrix
+
+			window.onkeydown = checkKey;
+			var delta = 5;
+			function checkKey(ev){
+
+				switch(ev.keyCode){
+					case 65: // 'a'
+						rotY -= delta;
+						break;
+					case 68: // 'd'
+						rotY += delta;
+						break;
+					case 87: // 'w'
+						rotX -= delta;
+						break;
+					case 83: // 's'
+						rotX += delta;
+						break;
+					case 107:
+					case 49: // '+'
+						subdivisions += 1;
+						loadModel(path);
+						break;
+					case 109:
+					case 189: // '-'
+						subdivisions -= 1;
+						if(subdivisions < 0)
+							subdivisions = 0;
+						else
+							loadModel(path);
+						break;
+					default:
+					  console.log(ev.keyCode); //--- DEBUG LINE ---
+					break;
+				}
+			}
+
+
+			//this function is called from initProgram() which is defined in webglTools.js, it is implemented here for clarity
+			function initShaderParameters(prg){
+				//The following lines get a reference to the uniforms and attributes defined in the shaders.
+				//This is a necessary step as the shaders are NOT written in JavaScript but in a
+				//specialized language called GLSL.
+
+				//--- Information for the Vertex Shader ---
+				// Attribute:
+				prg.vertexPositionAttribute = glContext.getAttribLocation(prg, "aVertexPosition");
+			    glContext.enableVertexAttribArray(prg.vertexPositionAttribute);
+
+			    prg.vertexNormalAttribute = glContext.getAttribLocation(prg, "aVertexNormal");
+			    glContext.enableVertexAttribArray(prg.vertexNormalAttribute);
+
+			    // Uniform:
+			    prg.pMatrixUniform             = glContext.getUniformLocation(prg, 'uPMatrix');
+			    prg.mvMatrixUniform            = glContext.getUniformLocation(prg, 'uMVMatrix');
+			    prg.nMatrixUniform             = glContext.getUniformLocation(prg, 'uNMatrix');
+
+			    prg.lightPositionUniform       = glContext.getUniformLocation(prg, 'uLightPosition');
+
+				//--- Information for the Fragment Shader ---
+			    prg.shininessUniform           = glContext.getUniformLocation(prg, 'uShininess');
+			    prg.lightAmbientUniform        = glContext.getUniformLocation(prg, 'uLightAmbient');
+			    prg.materialDiffuseUniform     = glContext.getUniformLocation(prg, 'uMaterialDiffuse');
+			    prg.materialSpecularUniform    = glContext.getUniformLocation(prg, 'uMaterialSpecular');
+			}
+
+
+
+			////////////////////////////////////////////////
+			////              Model Loader              ////
+			////////////////////////////////////////////////
+
+			/**
+			* Creates an AJAX request to load a model asynchronously
+			*/
+
+			function loadModel(filename){
+			    var request = new XMLHttpRequest();
+			    console.info('Requesting ' + filename);
+			    request.open("GET",filename);
+
+			    request.onreadystatechange = function() {
+			      if (request.readyState == 4) {
+			        if(request.status == 404) {
+			            console.info(filename + ' does not exist');
+			         }
+			        else {
+			            handleLoadedModel(filename,JSON.parse(request.responseText));
+
+			        }
+			      }
+			    }
+			    request.send();
+			}
+
+			/**
+			* Creates the buffers that contain the geometry of the model
+			*/
+			function handleLoadedModel(filename,payload) {
+				console.info(filename + ' has been retrieved from the server');
+
+				indices = payload.indices;
+				vertices = payload.vertices;
+				normals = payload.normals;
+				
+				var subd = (subdivisions == 0) ? -1 : 0;
+				for(; subd < subdivisions; subd++)
+				{
+					// We copy the old values and reset the global arrays
+					var oldIndices = indices;
+					indices = [];
+					var oldVertices = vertices;
+					vertices = [];
+					var oldNormals = normals;
+					normals = [];
+
+					// For each triangle
+					for(var i = 0; i < oldIndices.length; i += 3)
+					{
+						var i1 = oldIndices[i] * 3;
+						var i2 = oldIndices[i+1] * 3;
+						var i3 = oldIndices[i+2] * 3;
+					
+						var v1 = oldVertices.slice(i1, i1+3);
+						var v2 = oldVertices.slice(i2, i2+3);
+						var v3 = oldVertices.slice(i3, i3+3);
+					
+						var n1 = oldNormals.slice(i1, i1+3);
+						var n2 = oldNormals.slice(i2, i2+3);
+						var n3 = oldNormals.slice(i3, i3+3);
+						
+						var initIndex = vertices.length /3;
+						
+						vertices.push(
+							v1[0], v1[1], v1[2],
+							v2[0], v2[1], v2[2],
+							v3[0], v3[1], v3[2]);
+						
+						if(subdivisions > 0)
+							vertices.push(
+								(v1[0] + v2[0]) / 2.0,
+								(v1[1] + v2[1]) / 2.0,
+								(v1[2] + v2[2]) / 2.0,
+							
+								(v2[0] + v3[0]) / 2.0,
+								(v2[1] + v3[1]) / 2.0,
+								(v2[2] + v3[2]) / 2.0,
+							
+								(v3[0] + v1[0]) / 2.0,
+								(v3[1] + v1[1]) / 2.0,
+								(v3[2] + v1[2]) / 2.0
+							);
+
+						normals.push(
+							n1[0], n1[1], n1[2],
+							n2[0], n2[1], n2[2],
+							n3[0], n3[1], n3[2]);
+							
+						if(subdivisions > 0)
+							normals.push(
+								(n1[0] + n2[0]) / 2.0,
+								(n1[1] + n2[1]) / 2.0,
+								(n1[2] + n2[2]) / 2.0,
+							
+								(n2[0] + n3[0]) / 2.0,
+								(n2[1] + n3[1]) / 2.0,
+								(n2[2] + n3[2]) / 2.0,
+							
+								(n3[0] + n1[0]) / 2.0,
+								(n3[1] + n1[1]) / 2.0,
+								(n3[2] + n1[2]) / 2.0
+							);
+
+						if(subdivisions > 0)
+							indices.push(
+								initIndex + 3,
+								initIndex + 4,
+								initIndex + 5,
+						
+								initIndex,
+								initIndex + 3,
+								initIndex + 5,
+							
+								initIndex + 1,
+								initIndex + 3,
+								initIndex + 4,
+							
+								initIndex + 2,
+								initIndex + 4,
+								initIndex + 5
+							);
+						else
+							indices.push(
+								initIndex,
+								initIndex + 1,
+								initIndex + 2
+							);
+					}
+				}
+				
+				// The buffers are now arrays
+				vertexBuffer = [];
+				indexBuffer = [];
+				normalsBuffer = [];
+				indicesLength = [];
+				
+				var indStart = 0, vertStart = 0, trianglesAtATime = 10000, i = 0;
+				var vStep = subdivisions == 0 ? 9 : 18;
+				var iStep = subdivisions == 0 ? 3 : 12;
+				while(indStart < indices.length && vertStart < vertices.length)
+				{
+					var ind = indices.slice(indStart, indStart + trianglesAtATime * iStep).map(function(index) { return index - i*trianglesAtATime * ((subdivisions == 0) ? 3 : 6) ; });
+					indicesLength[i] = ind.length;
+					indexBuffer[i] = getIndexBufferWithIndices(ind);
+					vertexBuffer[i] = getVertexBufferWithVertices(vertices.slice(vertStart, vertStart + trianglesAtATime * vStep));
+					normalsBuffer[i] = getVertexBufferWithVertices(normals.slice(vertStart, vertStart + trianglesAtATime * vStep));
+				
+					indStart += iStep * trianglesAtATime;
+					vertStart += vStep * trianglesAtATime;
+					i++;
+				}
+				
+				console.log("vertices: "+ vertices.length);
+				console.log("normals: "+ normals.length);
+				console.log("indices: "+ indices.length);
+				document.getElementById("nbVertices").innerHTML = vertices.length;
+				document.getElementById("nbIndices").innerHTML = indices.length;
+				document.getElementById("nbSubdivisions").innerHTML = subdivisions;
+
+				// Init lights
+				initLights();
+
+			    // Starts rendering loop, calls drawScene
+				renderLoop();
+			}
+
+			// Utility function to convert degrees to radians
+			function degToRad(degrees){
+				return( degrees * Math.PI / 180.0 );
+			}
+
+			// Initializes light position and colors
+			function initLights(){
+			    glContext.uniform3f(prg.lightPositionUniform, 1, 1, 1);
+			    glContext.uniform3f(prg.lightAmbientUniform,0.1,0.1,0.1);
+				glContext.uniform3f(prg.materialSpecularUniform, 0.5,0.5,0.5);
+				glContext.uniform3f(prg.materialDiffuseUniform, 0.6,0.6,0.6);
+			    glContext.uniform1f(prg.shininessUniform, 24.0);
+			}
+			/*
+
+			* Draws the scene
+			*/
+			function drawScene(){
+				//light grey background
+				glContext.clearColor(0.9, 0.9, 1.0, 1.0); // #EEEEFF
+
+				//activate z-buffer
+				glContext.enable(glContext.DEPTH_TEST);
+
+				//resets color and depth buffer before drawing
+				glContext.clear(glContext.COLOR_BUFFER_BIT | glContext.DEPTH_BUFFER_BIT);
+
+				//defines viewport dimensions based on the webgl canvas size
+				glContext.viewport(0, 0, c_width, c_height);
+
+			    mat4.perspective(60, c_width / c_height, 0.1, 100.0, pMatrix);
+				mat4.identity(mvMatrix);
+
+				// For teapot
+				/*
+				var distance = -35;
+				mat4.translate(mvMatrix, [0.0, 0, distance]);
+				//*/
+
+				//Positions de object in the center of the scene
+			    var tx = 0;
+			    var ty = -0.4;
+				var tz = -1.3;
+
+				mat4.translate(mvMatrix, [tx, ty, tz]);
+			    //this example applies a rotation on the X and Y axes
+			    mat4.rotate(mvMatrix, degToRad(rotY), [0, 1, 0]);
+			    mat4.rotate(mvMatrix, degToRad(rotX), [1, 0, 0]);
+
+				//send the projection and model view matrices to the vertex shader
+			    glContext.uniformMatrix4fv(prg.pMatrixUniform, false, pMatrix);
+			    glContext.uniformMatrix4fv(prg.mvMatrixUniform, false, mvMatrix);
+
+				//calculate and send the normal matrix for shading calculation
+			    mat4.set(mvMatrix, nMatrix);
+			    mat4.inverse(nMatrix);
+			    mat4.transpose(nMatrix);
+
+			    glContext.uniformMatrix4fv(prg.nMatrixUniform, false, nMatrix);
+
+				for(var i = 0; i < indicesLength.length; i++)
+				{
+					//1. Sending vertices(1.1), normals(1.2), and indices(1.3) to the Vertex Shader;
+					//   then ask Vertex Shader to draw triangles between vertices(1.4)
+					//1.1 Send the array of VERTEX specifying that they are each composed of 3 parameters
+					glContext.bindBuffer(glContext.ARRAY_BUFFER, vertexBuffer[i]);
+					glContext.vertexAttribPointer(prg.vertexPositionAttribute, 3, glContext.FLOAT, false, 0, 0);
+
+					//1.2 Send the array of Vertex Normals for shading calculation
+					glContext.bindBuffer(glContext.ARRAY_BUFFER, normalsBuffer[i]);
+					glContext.vertexAttribPointer(prg.vertexNormalAttribute, 3, glContext.FLOAT, false, 0, 0);
+
+					//1.3 Send the array of INDEX (1 param. for each => no need of 'vertexAttribPointer')
+					glContext.bindBuffer(glContext.ELEMENT_ARRAY_BUFFER, indexBuffer[i]);
+
+					//1.4 Draw as triangles
+					glContext.drawElements(glContext.TRIANGLES, indicesLength[i], glContext.UNSIGNED_SHORT,0);
+				
+				}
+			}
+
+			/*******************************************************************************
+				Starting point!!
+				Initializes webgl, shaders, buffers and starts rendering loop
+			********************************************************************************/
+			function initWebGL(){
+				glContext = getGLContext('webgl-canvas');
+				//Initializes the program (shaders).
+				initProgram();
+				//Loads a model from file and initializes the buffers that we are going to use to draw polygons
+				//(vertex buffer, color and index buffer)
+				changeModel();
+			}
+			var path = "";
+			
+			
+			function changeModel() {
+				subdivisions = 0;
+				
+				path = 'models/' + document.getElementById('models').value + '.json';
+				loadModel(path);
+			}
+		</script>
+
+	</head>
+
+	<!-- HTML body -->
+	<body onload="initWebGL()">
+		<script>displayTitle("Eg06-04-03 : Subdivision des triangles d'un mod&egrave;le en format JSON (Phong shading)", 0,1,1,1);</script>
+		<p>
+		Appuyez sur la touche <strong>+</strong> pour augmenter ou sur <strong>-</strong> pour r&eacute;duire le nombre de subdivisions
+		</p>
+		<p>Les touches WASD permettent de changer l'angle de vue</p>
+		<select id="models">
+			<option value="a380">Airbus A380</option>
+			<option value="dino">Dinosaure</option>
+			<option value="f1">Formule 1</option>
+			<option value="fa18">F/A-18 Hornet</option>
+			<option value="hydrant">Hydrante</option>
+			<option value="minigun">Minigun</option>
+			<option value="mobo">Carte mère</option>
+			<option value="piano">Piano à queue</option>
+			<option value="playstation">Playstation 1</option>
+			<option value="quad">Quad</option>
+			<option value="rhino">Rhinocéros</option>
+			<option value="scrat">Scart (L'Âge de glace)</option>
+			<option value="shark">Requin</option>
+			<option value="sls">Mercedes-Benz SLS AMG</option>
+			<option value="spongebob">Bob l'éponge</option>
+			<option value="squeeze">Squeeze (Toy Story)</option>
+			<option value="sts">Navette spatiale américaine</option>
+			<option value="tank">Tank</option>
+			<option value="tron">Moto (Tron)</option>
+			<option value="ufo">OVNI</option>
+			<option value="wc" selected="selected">WC</option>
+			<option value="white-house">Maison blanche</option>
+			<option value="yoda">Maître Yoda</option>
+		</select>
+		<button onClick="changeModel();">Charger modèle</button>
+		<ul>
+			<li>Niveau de subdivision : <span id="nbSubdivisions"></span></li>
+			<li>Nombre de vertex : <span id="nbVertices"></span></li>
+			<li>Nombre d'indices : <span id="nbIndices"></span></li>
+		</ul>
+		<!-- WebGL canvas -->
+		<canvas id="webgl-canvas" width="500" height="500">
+			HTML5 is not supported
+		</canvas>
+	</body>
+
+
+
+
+</html>
