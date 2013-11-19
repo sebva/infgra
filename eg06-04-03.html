@@ -119,6 +119,7 @@
 						loadModel(path);
 						break;
 					case 109:
+					case 173:
 					case 189: // '-'
 						subdivisions -= 1;
 						if(subdivisions < 0)
@@ -289,30 +290,18 @@
 				normalsBuffer = [];
 				indicesLength = [];
 				
-				if(subdivisions > 0)
+				var indStart = 0, vertStart = 0, trianglesAtATime = 10000, i = 0;
+				while(indStart < indices.length && vertStart < vertices.length)
 				{
-					var indStart = 0, vertStart = 0, trianglesAtATime = 10000, i = 0;
-					while(indStart < indices.length && vertStart < vertices.length)
-					{
-						var ind = indices.slice(indStart, indStart + trianglesAtATime * 12).map(function(index) { return index - i*trianglesAtATime*6; });
-						indicesLength[i] = ind.length;
-						indexBuffer[i] = getIndexBufferWithIndices(ind);
-						vertexBuffer[i] = getVertexBufferWithVertices(vertices.slice(vertStart, vertStart + trianglesAtATime * 18));
-						normalsBuffer[i] = getVertexBufferWithVertices(normals.slice(vertStart, vertStart + trianglesAtATime * 18));
-					
-						indStart += 12 * trianglesAtATime;
-						vertStart += 18 * trianglesAtATime;
-						i++;
-					}
-				}
-				/* Special treatment when the original model is loaded because it's not always
-				sorted the same way as when we subdivise it ourselves. */
-				else
-				{
-					indicesLength[0] = indices.length;
-					vertexBuffer[0] = getVertexBufferWithVertices(vertices);					
-					normalsBuffer[0] = getVertexBufferWithVertices(normals);
-					indexBuffer[0] = getIndexBufferWithIndices(indices);
+					var ind = indices.slice(indStart, indStart + trianglesAtATime * 12).map(function(index) { return index - i*trianglesAtATime*6; });
+					indicesLength[i] = ind.length;
+					indexBuffer[i] = getIndexBufferWithIndices(ind);
+					vertexBuffer[i] = getVertexBufferWithVertices(vertices.slice(vertStart, vertStart + trianglesAtATime * 18));
+					normalsBuffer[i] = getVertexBufferWithVertices(normals.slice(vertStart, vertStart + trianglesAtATime * 18));
+				
+					indStart += 12 * trianglesAtATime;
+					vertStart += 18 * trianglesAtATime;
+					i++;
 				}
 				
 				console.log("vertices: "+ vertices.length);
