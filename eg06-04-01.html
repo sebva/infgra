@@ -227,6 +227,8 @@
 					counter += 3;
 				}
 				
+				console.log("normals length: " + normals.length);
+				
 				var DIV = 6;
 				goodSize = normals.length / DIV;
 				counter = 0;
@@ -259,9 +261,9 @@
 					var n2 = payload.normals.slice(i + 3, i + 6);
 					var n3 = payload.normals.slice(i + 6, i + 9);
 					
-					centralNormals[counter + 3] = centralNormals[counter] + (n1[0] + n2[0] + n3[0]) / 25.0;
-					centralNormals[counter + 4] = centralNormals[counter + 1] + (n1[1] + n2[1] + n3[1]) / 25.0;
-					centralNormals[counter + 5] = centralNormals[counter + 2] + (n1[2] + n2[2] + n3[2]) / 25.0;
+					centralNormals[counter + 3] = centralNormals[counter] + (n1[0] + n2[0] + n3[0]) / 30.0;
+					centralNormals[counter + 4] = centralNormals[counter + 1] + (n1[1] + n2[1] + n3[1]) / 30.0;
+					centralNormals[counter + 5] = centralNormals[counter + 2] + (n1[2] + n2[2] + n3[2]) / 30.0;
 					
 					// calcul des vecteurs AB et AC
 					// var AB = chasles(OA, OB);
@@ -274,6 +276,8 @@
 					
 					counter += 6;
 				}
+				
+				console.log("central normals length: " + centralNormals.length);
 				
 				centralNormalsBuffer = getVertexBufferWithVertices(centralNormals);
 				
