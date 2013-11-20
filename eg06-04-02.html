@@ -52,10 +52,14 @@
 				vec3 N = normalize(vNormal);
 				vec3 E = normalize(vEyeVec);
 				vec3 R = reflect(L, N);
+				
+				// The computation of the Gouraud shading is similar to Phong's
+				// but it's applied to vertices instead of fragments.
 				float specular = pow( max(dot(R, E), 0.0), uShininess);
 
 				fAngle = max(0.0, dot(normal, R));
-	
+				
+				
 				vColor = uLightAmbient + uMaterialDiffuse * fAngle + uMaterialSpecular * specular;
 		 	}
 		    
@@ -154,6 +158,8 @@
 					  console.log(ev.keyCode); //--- DEBUG LINE ---
 					break;
 				}
+				
+				// Display the current effect to the user
 				var effet;
 				if(phongGouraud == 1)
 					effet = 'Phong';

@@ -1,0 +1,8 @@
+Modèle de surfaces de subdivision
+=================================
+
+Pour subdiviser intelligemment, il faut déplacer les vertex subdivisés le long de leurs normales.
+Plus le nombre de subdivisions est grand, moins le déplacement est grand.
+Par exemple, pour le vertex v4 situé à mi-chemin entre v1 et v2 :
+	v4 = (v1 + v2) /2 + n4 * facteur
+Le facteur est calculé de manière à prendre en compte le nombre de subdivisions.
