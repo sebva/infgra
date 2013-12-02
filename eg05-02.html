@@ -149,8 +149,8 @@
 
 			var mvMatrix = mat4.create(); // The Model-View matrix
 			mat4.identity(mvMatrix);
-			mat4.translate(mvMatrix, [0.0, 0.0, -2.0]);
-			mat4.rotate(mvMatrix, -0.7, [1,0,0]);
+			var rotMatrix = mat4.create();
+			mat4.identity(rotMatrix);
 			var pMatrix  = mat4.create(); // The projection matrix
 			var nMatrix  = mat4.create(); // The normal matrix (related to the mvMatrix)
 						
@@ -429,21 +429,21 @@
 						
 				//send transformation matrices to vertex shader
 				mat4.perspective( 60.0, c_width / c_height, 0.1, 10000.0, pMatrix);
+				mat4.identity(mvMatrix);
 				
+				mat4.translate(mvMatrix, [0.0, 0.0, -2.0]);
 				//this example applies a rotation on the X and Y axes
-				var rotMatrix = mat4.create();
-				mat4.identity(rotMatrix);
-			    mat4.rotate(rotMatrix, degToRad(rotY), [0, 1, 0]);
-			    mat4.rotate(rotMatrix, degToRad(rotX), [1, 0, 0]);
+			    mat4.rotate(rotMatrix, degToRad(rotX), [0, 1, 0]);
+				mat4.rotate(rotMatrix, degToRad(rotY), [1, 0, 0]);
 				
 				// We multiply rotMatrix (containing the rotation to apply) by mvMatrix,
 				// which contains the existing transformations to the sphere.
 				// We store the result in mvMatrix, so we will have a combination of every move
 				// applied to the sphere in it.
-				mat4.multiply(rotMatrix, mvMatrix, mvMatrix);
+				mat4.multiply(mvMatrix, rotMatrix, mvMatrix);
 				
 				// As the rotation has been applied and saved in mvMatrix, we have to reset rotY and rotX
-				rotY = rotX = 0;		
+				rotY = rotX = 0;
 				
 				setLightPosition();				
 				
