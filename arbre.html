@@ -13,9 +13,6 @@
 		<!-- Matrix Library -->
 		<script type='text/javascript' src='js/gl-matrix-min.js'></script>
 
-		<!-- Basic WebGL initialization tools -->
-		<script type='text/javascript' src='js/webglTools_olderVersion.js'></script>
-
 		<!-- Vertex Shader //-->
 		<script id="shader-vs" type="x-shader/x-vertex">
 			attribute vec3 aVertexPosition;
@@ -54,10 +51,9 @@
 					
                    
 					vec4 texelColor = texture2D(uColorTexture, mapCoord); // the natural material color
-
-					gl_FragColor = texelColor.rgba;
+					gl_FragColor = texelColor;
                     
-                    if(gl_FragColor.r < 1.0 && gl_FragColor.r > 0.99 && gl_FragColor.g < 0.48 && gl_FragColor.g > 0.47 && gl_FragColor.b < 0.96 && gl_FragColor.b > 0.95)
+                    if(gl_FragColor.rgb == vec3(254.0/255.0, 121.0/255.0, 243.0/255.0).rgb)
                     {
                         //gl_FragColor = vec4(0.0,0.0,0.0,0.0); cause des bugs de transparence!
                         
@@ -166,6 +162,8 @@
 			function drawScene(){
 				glContext.clearColor(0.0, 0.0, 0.0, 0.0);
 				glContext.enable(glContext.DEPTH_TEST);
+				glContext.blendFunc(glContext.SRC_ALPHA, glContext.ONE_MINUS_SRC_ALPHA);
+				glContext.enable(glContext.BLEND);
 
 				glContext.clear(glContext.COLOR_BUFFER_BIT | glContext.DEPTH_BUFFER_BIT);
 				glContext.viewport( 0.0, 0.0, c_width, c_height);
