@@ -61,7 +61,8 @@
 			uniform bool usingNormalMap;
 			uniform bool usingSpecularMap;			
 			
-			uniform sampler2D uColorTexture;
+			uniform sampler2D uColorTexture1;
+			uniform sampler2D uColorTexture2;
 			uniform sampler2D uNormalMap;
 			uniform sampler2D uSpecularMap;
 
@@ -83,8 +84,17 @@
 				
 				vec3 finalColor = uLightAmbient;
 
-				if( usingColorMap ) baseColor = vec3(texture2D(uColorTexture, mapCoord));             // the natural material color
-				else baseColor = vec3(0.5, 0.5, 0.5); // middle grey
+				if( usingColorMap ) {
+					// baseColor = vec3(texture2D(uColorTexture1, mapCoord));         // the natural material color
+					
+					vec4 texelColor1 = texture2D(uColorTexture1, mapCoord); // the natural material color
+					vec4 texelColor2 = texture2D(uColorTexture2, mapCoord); // the natural material color
+					
+					baseColor = vec3((texelColor1 * (1.0 - mapCoord.x) + texelColor2 * mapCoord.x));
+					
+				} else {
+					baseColor = vec3(0.5, 0.5, 0.5); // middle grey
+				}
 				
 				if( usingNormalMap ) normalVector = normalize(vec3(texture2D(uNormalMap, mapCoord))); // the normal has a direct effet on diffuse and specular effects => they have to be normali
 				else normalVector = vec3( 0.0, 0.0, 1.0 ); // basic normal (z=1)
@@ -139,7 +149,8 @@
 			var indexBuffer  = null;
 			var textCoordsBuffer = null;
 			
-			var texColorTab = new Array();
+			var texColorTab1 = new Array();
+			var texColorTab2 = new Array();
 			var texNormalTab = new Array();
 			var texSpecTab  = new Array();
 
@@ -201,7 +212,8 @@
 				prg.usingNormalMapUniform   = glContext.getUniformLocation(prg, 'usingNormalMap');
 				prg.usingSpecularMapUniform = glContext.getUniformLocation(prg, 'usingSpecularMap');
 				
-				prg.uColorTexture 			= glContext.getUniformLocation(prg, "uColorTexture");
+				prg.uColorTexture1			= glContext.getUniformLocation(prg, "uColorTexture1");
+				prg.uColorTexture2          = glContext.getUniformLocation(prg, "uColorTexture2");
 				prg.uNormalMap   			= glContext.getUniformLocation(prg, "uNormalMap");
 				prg.uSpecularMap   			= glContext.getUniformLocation(prg, "uSpecularMap");
 			}
@@ -474,16 +486,20 @@
 				glContext.vertexAttribPointer(prg.textureCoordsAttribute, 2, glContext.FLOAT, false, 0, 0);
 				
 				glContext.activeTexture(glContext.TEXTURE0);
-				glContext.bindTexture(glContext.TEXTURE_2D, texColorTab[currentColorMapID-1]);
-				glContext.uniform1i(prg.uColorTexture, 0);
-
+				glContext.bindTexture(glContext.TEXTURE_2D, texColorTab1[currentColorMapID]);
+				glContext.uniform1i(prg.uColorTexture1, 0);
+				
 				glContext.activeTexture(glContext.TEXTURE1);
-				glContext.bindTexture(glContext.TEXTURE_2D, texNormalTab[currentNormalMapID-1]);
-				glContext.uniform1i(prg.uNormalMap, 1);
+				glContext.bindTexture(glContext.TEXTURE_2D, texColorTab2[currentColorMapID+1]);
+				glContext.uniform1i(prg.uColorTexture2, 1);
 
 				glContext.activeTexture(glContext.TEXTURE2);
+				glContext.bindTexture(glContext.TEXTURE_2D, texNormalTab[currentNormalMapID-1]);
+				glContext.uniform1i(prg.uNormalMap, 2);
+
+				glContext.activeTexture(glContext.TEXTURE3);
 				glContext.bindTexture(glContext.TEXTURE_2D, texSpecTab[currentSpecularMapID-1]);
-				glContext.uniform1i(prg.uSpecularMap, 2);
+				glContext.uniform1i(prg.uSpecularMap, 3);
 				
 				glContext.bindBuffer(glContext.ELEMENT_ARRAY_BUFFER, indexBuffer);
 				glContext.drawElements(glContext.TRIANGLES, indices.length, glContext.UNSIGNED_SHORT,0);
@@ -507,7 +523,8 @@
 					if(maxSample<10) fileName += "0";
 					fileName += index + "_";
 
-					initTextureWithImage(fileName+"colorMap.png", texColorTab);				
+					initTextureWithImage(fileName+"colorMap.png", texColorTab1);
+					initTextureWithImage(fileName+"colorMap.png", texColorTab2);
 					initTextureWithImage(fileName+"normalMap.png", texNormalTab);
 					initTextureWithImage(fileName+"specularMap.png", texSpecTab);					
 				}
