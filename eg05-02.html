@@ -63,6 +63,8 @@
 			
 			uniform sampler2D uColorTexture1;
 			uniform sampler2D uColorTexture2;
+			uniform float deltaTexX;
+			uniform float deltaTexY;
 			uniform sampler2D uNormalMap;
 			uniform sampler2D uSpecularMap;
 
@@ -86,6 +88,13 @@
 
 				if( usingColorMap ) {
 					// baseColor = vec3(texture2D(uColorTexture1, mapCoord));         // the natural material color
+					vec2 offset = vec2(deltaTexX, deltaTexY);
+					mapCoord += offset;
+					
+					if(mapCoord.x > 1.0) mapCoord.x -= 1.0;
+					if(mapCoord.y > 1.0) mapCoord.y -= 1.0;
+					if(mapCoord.x < 0.0) mapCoord.x += 1.0;
+					if(mapCoord.y < 0.0) mapCoord.y += 1.0;
 					
 					vec4 texelColor1 = texture2D(uColorTexture1, mapCoord); // the natural material color
 					vec4 texelColor2 = texture2D(uColorTexture2, mapCoord); // the natural material color
@@ -173,6 +182,12 @@
 			
 			var lastMousePosition = [0, 0];
 			
+			var textureInTranslation = 0;
+			var textureOffsetX = 0.0;
+			var textureOffsetY = 0.0;
+			const deltaTranslateX = 0.001;
+			const deltaTranslateY = 0.002;
+			
 			// utility function to convert degrees to radians
 			function degToRad(degrees){
 				return degrees * Math.PI / 180;
@@ -216,6 +231,9 @@
 				prg.uColorTexture2          = glContext.getUniformLocation(prg, "uColorTexture2");
 				prg.uNormalMap   			= glContext.getUniformLocation(prg, "uNormalMap");
 				prg.uSpecularMap   			= glContext.getUniformLocation(prg, "uSpecularMap");
+				
+				prg.deltaTexX 				= glContext.getUniformLocation(prg, "deltaTexX");
+				prg.deltaTexY				= glContext.getUniformLocation(prg, "deltaTexY");
 			}
 
 			function initBuffers(){
@@ -322,10 +340,15 @@
           0.0, 1.0,
 
           // Back face
-          1.0, 0.0,
-          1.0, 1.0,
-          0.0, 1.0,
-          0.0, 0.0,
+          // 0.0, 1.0,
+          // 0.0, 0.0,
+          // 1.0, 0.0,
+          // 1.0, 1.0,
+		  		  1.0, 1.0,
+
+		  1.0, 0.0,
+		  0.0, 0.0,
+		  		  0.0, 1.0,
 
           // Top face
           0.0, 1.0,
@@ -334,10 +357,10 @@
           1.0, 1.0,
 
           // Bottom face
-          1.0, 1.0,
-          0.0, 1.0,
           0.0, 0.0,
           1.0, 0.0,
+		  1.0, 1.0,
+          0.0, 1.0,
 
           // Right face
           1.0, 0.0,
@@ -462,7 +485,27 @@
 				// As the rotation has been applied and saved in mvMatrix, we have to reset rotY and rotX
 				rotY = rotX = 0;
 				
-				setLightPosition();				
+				setLightPosition();		
+
+				switch( textureInTranslation ) {
+					case 1:
+					console.log( "c1" );
+						if (textureOffsetX<1.0) textureOffsetX += deltaTranslateX;
+						else textureOffsetX = 0.0;
+					break;
+					case 2:
+					console.log( "c2" );
+						if (textureOffsetY<1.0) textureOffsetY += deltaTranslateY;
+						else textureOffsetY = 0.0;
+					break;
+					case 3:
+					console.log( "c3" );
+						if (textureOffsetX<1.0) textureOffsetX += deltaTranslateX;
+						else textureOffsetX = 0.0;
+						if (textureOffsetY<1.0) textureOffsetY += deltaTranslateY;
+						else textureOffsetY = 0.0;
+					break;
+				}				
 				
 				//send the projection and model view matrices to the vertex shader
 				glContext.uniformMatrix4fv(prg.pMatrixUniform, false, pMatrix);
@@ -505,6 +548,9 @@
 				glContext.activeTexture(glContext.TEXTURE3);
 				glContext.bindTexture(glContext.TEXTURE_2D, texSpecTab[currentSpecularMapID-1]);
 				glContext.uniform1i(prg.uSpecularMap, 3);
+				
+				glContext.uniform1f(prg.deltaTexX, textureOffsetX);
+				glContext.uniform1f(prg.deltaTexY, textureOffsetY);
 				
 				glContext.bindBuffer(glContext.ELEMENT_ARRAY_BUFFER, indexBuffer);
 				glContext.drawElements(glContext.TRIANGLES, indices.length, glContext.UNSIGNED_SHORT,0);
@@ -589,6 +635,15 @@
 				if( document.getElementById( checkboxID ).checked ) document.getElementById( buttonID ).disabled = false;
 				else document.getElementById( buttonID ).disabled = true;
 			}
+			function animateTexture(){ 
+				if( document.getElementById("animateCheckBox2").checked ) 
+					textureInTranslation = 1;
+				else
+					textureInTranslation = 0;
+					
+				if( document.getElementById("animateCheckBox3").checked ) 
+					textureInTranslation += 2;
+			}
 		</script>
 	</head>
 	
@@ -600,6 +655,8 @@
 			<input id="useNormalMapCheckBox" type="checkbox" checked=true onchange="changeTheMapUse( 'useNormalMapCheckBox', 'normalMapButton' )">NormalMap</input>
 			<input id="useSpecularMapCheckBox" type="checkbox" checked=true onchange="changeTheMapUse( 'useSpecularMapCheckBox', 'specularMapButton' )">SpecularMap</input>
 			<input id="animateCheckBox" type="checkbox" checked=true onchange="animateObject()">Rotation</input>
+			<input id="animateCheckBox2" type="checkbox" onchange="animateTexture()">Texture sur X</input>
+			<input id="animateCheckBox3" type="checkbox" onchange="animateTexture()">texture sur Y</input>
 			<br />
 			<span id="spanID1"><button id="colorMapButton" onclick="changeColorMap()">ColorMap</button></span>
 			<span id="spanID2"><button id="normalMapButton" onclick="changeNormalMap()">NormalMap</button></span>
