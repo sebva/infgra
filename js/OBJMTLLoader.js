@@ -1,32 +1,64 @@
 /**
+ * Loads a Wavefront .obj file with materials
+ *
  * @author mrdoob / http://mrdoob.com/
+ * @author angelxuanchang
  */
 
-THREE.OBJLoader = function ( manager ) {
+THREE.OBJMTLLoader = function () {};
 
-	this.manager = ( manager !== undefined ) ? manager : THREE.DefaultLoadingManager;
+THREE.OBJMTLLoader.prototype = {
 
-};
+	constructor: THREE.OBJMTLLoader,
 
-THREE.OBJLoader.prototype = {
-
-	constructor: THREE.OBJLoader,
-
-	load: function ( url, onLoad, onProgress, onError ) {
+	load: function ( url, mtlurl, onLoad, onProgress, onError ) {
 
 		var scope = this;
 
-		var loader = new THREE.XHRLoader( scope.manager );
-		loader.setCrossOrigin( this.crossOrigin );
-		loader.load( url, function ( text ) {
+		var mtlLoader = new THREE.MTLLoader( url.substr( 0, url.lastIndexOf( "/" ) + 1 ) );
+		mtlLoader.load( mtlurl, function ( materials ) {
 
-			onLoad( scope.parse( text ) );
+			var materialsCreator = materials;
+			materialsCreator.preload();
+
+			var loader = new THREE.XHRLoader( scope.manager );
+			loader.setCrossOrigin( this.crossOrigin );
+			loader.load( url, function ( text ) {
+
+				var object = scope.parse( text );
+
+				object.traverse( function ( object ) {
+
+					if ( object instanceof THREE.Mesh ) {
+
+						if ( object.material.name ) {
+
+							var material = materialsCreator.create( object.material.name );
+
+							if ( material ) object.material = material;
+
+						}
+
+					}
+
+				} );
+
+				onLoad( object );
+
+			} );
 
 		} );
 
 	},
 
-	parse: function ( text ) {
+	/**
+	 * Parses loaded .obj file
+	 * @param data - content of .obj file
+	 * @param mtllibCallback - callback to handle mtllib declaration (optional)
+	 * @return {THREE.Object3D} - Object3D (with default material)
+	 */
+
+	parse: function ( data, mtllibCallback ) {
 
 		function vector( x, y, z ) {
 
@@ -45,11 +77,53 @@ THREE.OBJLoader.prototype = {
 			return new THREE.Face3( a, b, c, normals );
 
 		}
-		
-		var object = new THREE.Object3D();
-		var geometry, material, mesh;
+
 		var face_offset = 0;
-		
+
+		function meshN( meshName, materialName ) {
+
+			if ( vertices.length > 0 ) {
+
+				geometry.vertices = vertices;
+
+				geometry.mergeVertices();
+				geometry.computeCentroids();
+				geometry.computeFaceNormals();
+				geometry.computeBoundingSphere();
+
+				object.add( mesh );
+
+				geometry = new THREE.Geometry();
+				mesh = new THREE.Mesh( geometry, material );
+				verticesCount = 0;
+
+			}
+
+			if ( meshName !== undefined ) mesh.name = meshName;
+
+			if ( materialName !== undefined ) {
+
+				material = new THREE.MeshLambertMaterial();
+				material.name = materialName;
+
+				mesh.material = material;
+
+			}
+
+		}
+
+		var group = new THREE.Object3D();
+		var object = group;
+
+		var geometry = new THREE.Geometry();
+		var material = new THREE.MeshLambertMaterial();
+		var mesh = new THREE.Mesh( geometry, material );
+
+		var vertices = [];
+		var verticesCount = 0;
+		var normals = [];
+		var uvs = [];
+
 		function add_face( a, b, c, normals_inds ) {
 
 			if ( normals_inds === undefined ) {
@@ -78,7 +152,7 @@ THREE.OBJLoader.prototype = {
 		}
 		
 		function add_uvs( a, b, c ) {
-      
+
 			geometry.faceVertexUvs[ 0 ].push( [
 				uvs[ parseInt( a ) - 1 ].clone(),
 				uvs[ parseInt( b ) - 1 ].clone(),
@@ -88,15 +162,13 @@ THREE.OBJLoader.prototype = {
 		}
 		
 		function handle_face_line(faces, uvs, normals_inds) {
-
+			
 			if ( faces[ 3 ] === undefined ) {
 				
 				add_face( faces[ 0 ], faces[ 1 ], faces[ 2 ], normals_inds );
 				
 				if (!(uvs === undefined) && uvs.length > 0) {
-
 					add_uvs( uvs[ 0 ], uvs[ 1 ], uvs[ 2 ] );
-
 				}
 
 			} else {
@@ -124,21 +196,6 @@ THREE.OBJLoader.prototype = {
 			
 		}
 
-		// create mesh if no objects in text
-
-		if ( /^o /gm.test( text ) === false ) {
-
-			geometry = new THREE.Geometry();
-			material = new THREE.MeshLambertMaterial();
-			mesh = new THREE.Mesh( geometry, material );
-			object.add( mesh );
-
-		}
-
-		var vertices = [];
-		var verticesCount = 0;
-		var normals = [];
-		var uvs = [];
 
 		// v float float float
 
@@ -170,7 +227,7 @@ THREE.OBJLoader.prototype = {
 
 		//
 
-		var lines = text.split( '\n' );
+		var lines = data.split( "\n" );
 
 		for ( var i = 0; i < lines.length; i ++ ) {
 
@@ -187,7 +244,7 @@ THREE.OBJLoader.prototype = {
 
 				// ["v 1.0 2.0 3.0", "1.0", "2.0", "3.0"]
 
-				geometry.vertices.push( vector(
+				vertices.push( vector(
 					parseFloat( result[ 1 ] ),
 					parseFloat( result[ 2 ] ),
 					parseFloat( result[ 3 ] )
@@ -250,60 +307,57 @@ THREE.OBJLoader.prototype = {
 			} else if ( /^o /.test( line ) ) {
 
 				// object
-
-				if (!(geometry === undefined)) {
-
-					face_offset = face_offset + geometry.vertices.length;
-
-				}
 				
-				geometry = new THREE.Geometry();
-				material = new THREE.MeshLambertMaterial();
-
-				mesh = new THREE.Mesh( geometry, material );
-				mesh.name = line.substring( 2 ).trim();
-				object.add( mesh );
-
-				verticesCount = 0;
+				meshN();
+				face_offset = face_offset + vertices.length;
+				vertices = [];
+				object = new THREE.Object3D();
+				object.name = line.substring( 2 ).trim();
+				group.add( object );
 
 			} else if ( /^g /.test( line ) ) {
 
 				// group
 
+				meshN( line.substring( 2 ).trim(), undefined );
+
 			} else if ( /^usemtl /.test( line ) ) {
 
 				// material
 
-				material.name = line.substring( 7 ).trim();
+				meshN( undefined, line.substring( 7 ).trim() );
 
 			} else if ( /^mtllib /.test( line ) ) {
 
 				// mtl file
 
+				if ( mtllibCallback ) {
+
+					var mtlfile = line.substring( 7 );
+					mtlfile = mtlfile.trim();
+					mtllibCallback( mtlfile );
+
+				}
+
 			} else if ( /^s /.test( line ) ) {
 
-				// smooth shading
+				// Smooth shading
 
 			} else {
 
-				// console.log( "THREE.OBJLoader: Unhandled line " + line );
+				console.log( "THREE.OBJMTLLoader: Unhandled line " + line );
 
 			}
 
 		}
 
-		for ( var i = 0, l = object.children.length; i < l; i ++ ) {
-
-			var geometry = object.children[ i ].geometry;
-
-			geometry.computeCentroids();
-			geometry.computeFaceNormals();
-			geometry.computeBoundingSphere();
-
-		}
+		//Add last object
+		meshN(undefined, undefined);
 		
-		return object;
+		return group;
 
 	}
 
 };
+
+THREE.EventDispatcher.prototype.apply( THREE.OBJMTLLoader.prototype );
