@@ -49,10 +49,8 @@
 			var windowHalfX = window.innerWidth / 2;
 			var windowHalfY = window.innerHeight / 2;
 
-
 			init();
 			animate();
-
 
 			function init() {
 
@@ -69,16 +67,19 @@
 				var ambient = new THREE.AmbientLight( 0xffffff );
 				scene.add( ambient );
 
+				var hemiLight = new THREE.HemisphereLight( 0xffffff, 0xffffff, 0.8 ); 
 				var directionalLight = new THREE.DirectionalLight( 0xffeedd );
 				directionalLight.position.set( 0, 0, 1 ).normalize();
 				scene.add( directionalLight );
+				scene.add(hemiLight);
 
 				// model
 
 				var loader = new THREE.OBJMTLLoader();
 				loader.load( 'models/face/face.obj', 'models/face/face.mtl', function ( object ) {
 
-					object.position.y = -50;
+					object.position.y = -10;
+					object.position.z = -50;
 					object.scale.x = object.scale.y = object.scale.z = 0.6;
 					scene.add( object );
 
@@ -92,7 +93,6 @@
 				document.addEventListener( 'mousemove', onDocumentMouseMove, false );
 
 				window.addEventListener( 'resize', onWindowResize, false );
-
 			}
 
 			function onWindowResize() {
