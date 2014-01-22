@@ -31,7 +31,7 @@
 		<br /><span>test</span>
 		</div>
 
-		<script src="js/three.min.js"></script>
+		<script src="js/three.js"></script>
 
 		<script src="js/MTLLoader.js"></script>
 		<script src="js/OBJMTLLoader.js"></script>
@@ -63,6 +63,8 @@
 
 			var windowHalfX = window.innerWidth / 2;
 			var windowHalfY = window.innerHeight / 2;
+			
+			var objects = [];
 
 			init();
 			animate();
@@ -88,11 +90,23 @@
 				scene.add( directionalLight );
 				scene.add(hemiLight);
 
+				var material = new THREE.MeshPhongMaterial( { color: 0x00ff00 } );
+				
 				// model
 
 				var loader = new THREE.OBJMTLLoader();
-				loader.load( 'models/face/face.obj', 'models/face/face.mtl', function ( object ) {
+				loader.load( 'models/face2/face.obj', 'models/face2/face.mtl', function ( object ) {
 
+					object.traverse(function(child) {
+						if(child instanceof THREE.Mesh)
+						{
+							console.log(child);
+							objects.push(child);
+							if(child.geometry.vertices.length > 3000);
+								;//child.geometry.vertices[200].add(new THREE.Vector3(10, 10 ,-10));
+						}
+					});
+				
 					object.position.y = -10;
 					object.position.z = -50;
 					object.scale.x = object.scale.y = object.scale.z = 0.6;
@@ -106,6 +120,7 @@
 				container.appendChild( renderer.domElement );
 
 				document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+				document.addEventListener( 'mousedown', onDocumentMouseDown, false );
 
 				window.addEventListener( 'resize', onWindowResize, false );
 			}
@@ -128,8 +143,28 @@
 				mouseY = ( event.clientY - windowHalfY ) / 2;
 
 			}
+			var projector = new THREE.Projector();
+			function onDocumentMouseDown( event ) {
 
-			//
+				event.preventDefault();
+
+				var vector = new THREE.Vector3( event.x, event.y, 0.5 );
+				projector.unprojectVector( vector, camera );
+
+				var raycaster = new THREE.Raycaster( camera.position, vector.sub( camera.position ).normalize() );
+
+				var intersects = raycaster.intersectObjects( objects );
+
+				if ( intersects.length > 0 ) {
+
+					var selected = intersects[ 0 ].object;
+					console.log(intersects[0]);
+					selected.geometry.verticesNeedUpdate = true;
+					selected.geometry.vertices[intersects[0].face.a].add(new THREE.Vector3(10, 10, -10));
+
+				}
+
+			}
 
 			function animate() {
 
